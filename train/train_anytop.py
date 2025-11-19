@@ -1,6 +1,7 @@
 # This code is based on https://github.com/openai/guided-diffusion
 """
 Train a diffusion model on motions.
+python -m train.train_anytop --model_prefix bipeds --objects_subset all --lambda_geo 1.0 --overwrite --balanced
 """
 import sys
 import os

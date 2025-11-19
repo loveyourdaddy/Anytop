@@ -1,0 +1,4 @@
+*.pyc
+save/
+dataset/truebones/zoo/truebones_processed/
+dataset/truebones/zoo/Truebone_Z-OO/

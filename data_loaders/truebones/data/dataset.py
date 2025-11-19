@@ -60,6 +60,7 @@ class MotionDataset(data.Dataset):
             joints_names_embs = self.encode_joints_names(joints_names).detach().cpu().numpy()
             kinematic_chains = self.cond_dict[object_type]['kinematic_chains']
             object_motions = [f for f in os.listdir(opt.motion_dir) if f.startswith(f'{object_type}_')]
+            print(f'>> Loading {len(object_motions)} motions for object type {object_type}')
             
             for name in object_motions:
                 try:
@@ -161,7 +162,10 @@ class TruebonesSampler(WeightedRandomSampler):
         object_share = 1.0/len(object_types)
         pointer = data_source.motion_dataset.pointer
         for object_type in object_types:
+            print("Calculating weights for object type: %s"%object_type)
             object_indices = [i for i in range(num_samples) if i>=pointer and name_list[i].startswith(f'{object_type}_')]
+            if len(object_indices) == 0:
+                continue
             object_prob = object_share / len(object_indices)
             weights[object_indices] = object_prob
         super().__init__(num_samples=num_samples, weights=weights)

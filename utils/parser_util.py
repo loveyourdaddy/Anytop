@@ -62,7 +62,7 @@ def add_base_options(parser):
     group.add_argument("--cuda", default=True, type=bool, help="Use cuda device, otherwise use CPU.")
     group.add_argument("--device", default=0, type=int, help="Device id to use.")
     group.add_argument("--seed", default=10, type=int, help="For fixing random seed.")
-    group.add_argument("--batch_size", default=16, type=int, help="Batch size during training.")
+    group.add_argument("--batch_size", default=4, type=int, help="Batch size during training.") # 16 # TODO
     group = parser.add_argument_group('diffusion')
     group.add_argument("--noise_schedule", default='cosine', choices=['linear', 'cosine'], type=str,
                        help="Noise schedule type")
@@ -175,6 +175,13 @@ def add_generate_options(parser):
     group.add_argument("--object_type", default=['Flamingo'], type=str, nargs='+',
                        help="An object type to be generated. If empty, will generate flamingo :).")
     
+    # Retargeting options
+    parser.add_argument('--source_motion', type=str, help='Path to source motion file')
+    parser.add_argument('--source_type', type=str, help='Source skeleton type')
+    parser.add_argument('--retarget_mode', type=str, default='guided', 
+                    choices=['guided', 'inpaint', 'full'],
+                    help='Retargeting strategy')
+
 def add_dift_options(parser):
     # bvhs_dir, sample_bvh, face_joints, save_dir=None, tpos_bvh=None
     group = parser.add_argument_group('dift')

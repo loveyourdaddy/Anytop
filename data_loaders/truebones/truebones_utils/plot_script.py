@@ -515,7 +515,7 @@ def save_multiple_samples(out_path, file_name,  animations, fps, max_frames):
     
 def save_sample(out_path, file_name, animation, fps, max_frames):
     sample_save_path = os.path.join(out_path, file_name)
-    print(f'saving {file_name}')
+    print(f'>> saving {file_name} in {sample_save_path}')
     animation.duration = max_frames/fps
     animation.write_videofile(sample_save_path, fps=fps, threads=4, logger=None)
     animation.close()

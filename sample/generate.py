@@ -1,3 +1,6 @@
+'''
+python -m sample.generate  --model_path save/flying_model_dataset_truebones_bs_16_latentdim_128/model000229999.pt --object_type Parrot2 Bat --num_repetitions 3
+'''
 # This code is based on https://github.com/openai/guided-diffusion
 """
 Generate a large batch of image samples from a model and save them as a large
@@ -59,8 +62,8 @@ def main(args = None, cond_dict = None):
     t5_conditioner = T5Conditioner(name=args.t5_name, finetune=False, word_dropout=0.0, normalize_text=False, device='cuda')
     model.to(dist_util.dev())
     model.eval()  # disable random masking
+    
     _, model_kwargs = create_condition(object_types, cond_dict, n_frames, args.temporal_window, t5_conditioner=t5_conditioner, max_joints=opt.max_joints, feature_len=opt.feature_len)
-
 
     for rep_i in range(args.num_repetitions):
         print(f'### Sampling [repetitions #{rep_i}]')
@@ -101,6 +104,8 @@ def main(args = None, cond_dict = None):
             bvh_name = name_pref+'_#%d.bvh'%(len(existing_mp4_files))
             plot_general_skeleton_3d_motion(pjoin(out_path, mp4_name), parents, global_positions, title=name_pref, fps=fps)
             np.save(pjoin(out_path, npy_name), motion)
+            print(">> created motion: "+ pjoin(out_path, npy_name))
+            
             if out_anim is not None:
                 BVH.save(pjoin(out_path, bvh_name), out_anim, cond_dict[object_type]['joints_names'])
             print("repetition #" + str(rep_i) + " ,created motion: "+ npy_name)

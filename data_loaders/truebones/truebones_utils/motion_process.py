@@ -391,12 +391,14 @@ def process_object(object_type, files_counter, frames_counter, max_joints, squar
                 files_counter += 1
                 frames_counter += motion.shape[0]
                 name = object_type + "_" + action + "_" + str(files_counter)
-                np.save(pjoin(save_dir, MOTION_DIR, name + '.npy'), motion)
+                np.save(pjoin(save_dir, MOTION_DIR, name + '.npy'), motion) # dataset/truebones/zoo/truebones_processed/motions/Alligator_Alligator_Walk1_1.npy
                 BVH.save(pjoin(save_dir, BVHS_DIR, name+".bvh"), new_anim, names)
+                
                 # create mp4 from rotations (sanity check)
-                positions = recover_from_bvh_ric_np(motion)
-                fc = [[j for j in range(len(parents)) if motion[f, j , 12] != 0] for f in range(motion.shape[0])]
-                plot_general_skeleton_3d_motion(pjoin(save_dir, ANIMATIONS_DIR, name+"_from_ric.mp4"), parents, positions, dataset="truebones", title="", fps=20, face_joints=face_joints if face_joints is not None else FACE_JOINTS[object_type], fc = fc)
+                # positions = recover_from_bvh_ric_np(motion)
+                # fc = [[j for j in range(len(parents)) if motion[f, j , 12] != 0] for f in range(motion.shape[0])]
+                # dataset/truebones/zoo/truebones_processed/animations/Alligator_Alligator_Walk1_1_from_ric.mp4
+                # plot_general_skeleton_3d_motion(pjoin(save_dir, ANIMATIONS_DIR, name+"_from_ric.mp4"), parents, positions, dataset="truebones", title="", fps=20, face_joints=face_joints if face_joints is not None else FACE_JOINTS[object_type], fc = fc)
         
             else:
                 print(f'failed to process file: {f}, slice {begin}:{slice_ind}')
@@ -422,6 +424,11 @@ def create_data_samples():
     objects_counter = dict()
     squared_positions_error = dict()
     cond = dict()
+    
+    # filter 
+    bvh_folders = os.listdir(RAW_DATA_DIR)
+    objects = [obj for obj in objects if obj in bvh_folders]
+    # objects = [bvh_folder for bvh_folder in bvh_folders if bvh_folder in objects]
     
     for object_type in objects:
         if object_type in NO_BVHS:
