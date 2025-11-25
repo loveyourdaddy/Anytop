@@ -104,13 +104,16 @@ def truebones_collate(batch):
 def truebones_batch_collate(batch):
     max_joints = batch[0][-1]
     adapted_batch = []
+    
     for b in batch:  
         max_len, n_joints, n_feats = b[0].shape
+        # print("max_len, n_joints, n_feats:", max_len, n_joints, n_feats)
         tpos_first_frame = torch.zeros((max_joints, n_feats))
         tpos_first_frame[:n_joints] = torch.tensor(b[3])
         motion = torch.zeros((max_len, max_joints, n_feats)) # (frames, max_joints, feature_len) 
         motion[:, :b[0].shape[1], :] = torch.tensor(b[0])   
         joints_names_embs = torch.zeros((max_joints, b[9].shape[1]))
+        # print(f"joints_names_embs: {joints_names_embs.shape}, n_joints:{n_joints}, b[9]: {b[9].shape}")
         joints_names_embs[:n_joints] = torch.tensor(b[9])
         crop_start_ind = b[10]
         mean = torch.zeros((max_joints, n_feats))
