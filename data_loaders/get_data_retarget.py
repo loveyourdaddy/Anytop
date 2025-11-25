@@ -12,7 +12,7 @@ def get_dataset_class(name):
 
 
 def get_retarget_dataset(
-    args, 
+    args,
     num_frames,
     split='train',
     temporal_window=31,
@@ -24,7 +24,7 @@ def get_retarget_dataset(
 ):
     """
     Get retargeting dataset
-    
+
     Args:
         num_frames: Number of frames per sequence
         split: Train/val/test split (currently unused for retargeting)
@@ -34,7 +34,7 @@ def get_retarget_dataset(
         target_skeletons: List of target skeleton types (e.g., ['Horse', 'Parrot2'])
         data_root: Root directory of motion data
         use_augmentation: Whether to use joint augmentation
-    
+
     Returns:
         RetargetDataset instance
     """
@@ -67,7 +67,7 @@ def get_retarget_dataset_loader(
 ):
     """
     Get data loader for retargeting training
-    
+
     Args:
         batch_size: Batch size
         num_frames: Number of frames per sequence
@@ -80,7 +80,7 @@ def get_retarget_dataset_loader(
         balanced: Whether to use balanced sampling (currently unused for retargeting)
         use_augmentation: Whether to use joint augmentation
         num_workers: Number of data loading workers
-    
+
     Returns:
         DataLoader instance
     """
@@ -96,17 +96,17 @@ def get_retarget_dataset_loader(
         data_root=data_root,
         use_augmentation=use_augmentation
     )
-    
+
     # Collate function
     collate = collate_retarget_batch
-    
+
     # Sampler
     sampler = None
     if balanced:
         from data_loaders.truebones.data.dataset_retarget import RetargetSampler
         print("Using balanced sampling for retargeting...")
         sampler = RetargetSampler(dataset)
-    
+
     # Create dataloader
     loader = DataLoader(
         dataset,
@@ -118,5 +118,5 @@ def get_retarget_dataset_loader(
         collate_fn=collate,
         pin_memory=True if num_workers > 0 else False  # num_workers=0일 때 pin_memory=False
     )
-    
+
     return loader

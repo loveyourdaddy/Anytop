@@ -25,10 +25,10 @@ from utils.ml_platforms import ClearmlPlatform, TensorboardPlatform, NoPlatform,
 def main():
     args = train_args()
     fixseed(args.seed)
-    
+
     args.source_skeleton = "Alligator"
     args.target_skeletons = ["Alligator"]
-    args.batch_size = 1 # TODO
+    # args.batch_size = 1 # TODO
 
     # Setup save directory
     save_dir = args.save_dir
