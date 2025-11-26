@@ -87,7 +87,7 @@ class RetargetTrainLoop:
             self._load_optimizer_state()
 
         # Device
-        self.device = torch.device("cpu")
+        self.device = torch.device("cuda")
         if torch.cuda.is_available() and dist_util.dev() != 'cpu':
             self.device = torch.device(dist_util.dev())
 
@@ -208,16 +208,17 @@ class RetargetTrainLoop:
                    self.total_step() == self.num_steps - 1:
                     self.save()
 
-                save_training_visualization(
-                    model=self.model,
-                    diffusion=self.diffusion,
-                    batch_data=batch_data,
-                    save_dir=self.save_dir,
-                    step=self.total_step(),
-                    device=self.device,
-                    num_samples=1,
-                    fps=30
-                )
+                    # Visualize 
+                    save_training_visualization(
+                        model=self.model,
+                        diffusion=self.diffusion,
+                        batch_data=batch_data,
+                        save_dir=self.save_dir,
+                        step=self.total_step(),
+                        device=self.device,
+                        num_samples=self.batch_size,
+                        fps=30
+                    )
 
                 # Integration test
                 if os.environ.get("DIFFUSION_TRAINING_TEST", "") and self.step > 0:
@@ -513,6 +514,7 @@ def save_training_visualization(
         fps: Frames per second for video
     """
     print(f"\n{'='*80}")
+    print(f"VISUALIZATIONS AT STEP {step}")
 
     model.eval()
 

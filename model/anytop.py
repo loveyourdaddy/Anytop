@@ -113,7 +113,12 @@ class InputProcess(nn.Module):
         if not self.skip_t5:
             self.joints_names_dropout = nn.Dropout(p=0.1)
             self.text_embedding = nn.Linear(t5_output_dim, self.latent_dim)
+    
     def forward(self, x, tpos_first_frame, joints_embedded_names, crop_start_ind):
+        # batch_size와 visualize sample의 크기가 다를경우
+        # if tpos_first_frame.ndim == 4:
+        #     tpos_first_frame = tpos_first_frame.squeeze(0)
+            
         # x.shape = [batch_size, joints, 13, frames]
         x = x.permute(3, 0, 1, 2) # [frames, batch_size, n_joints, features_len]
         tpos_all_joints_except_root = self.tpos_joint_embedding(tpos_first_frame[:, :, 1:])
