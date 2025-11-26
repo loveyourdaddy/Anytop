@@ -9,6 +9,8 @@ python -m train.train_retarget \
     --model_prefix retarget_alligator \
     --batch_size 16 \
     --overwrite
+
+python -m train.train_retarget --model_prefix retarget_alligator --batch_size 16 --overwrite
 """
 import sys
 import os
@@ -28,6 +30,7 @@ def main():
 
     args.source_skeleton = "Alligator"
     args.target_skeletons = ["Alligator"]
+    args.save_interval = 100  # 10000
     # args.batch_size = 1 # TODO
 
     # Setup save directory

@@ -498,7 +498,7 @@ def plot_general_skeleton_pca(parents, pca_results, joints, title, dataset, figs
 
 def save_multiple_samples(out_path, file_name,  animations, fps, max_frames):
     sample_save_path = os.path.join(out_path, file_name)
-    print(f'saving {file_name}')
+    # print(f'saving {file_name}')
 
     clips = clips_array(animations)
     clips.duration = max_frames/fps
