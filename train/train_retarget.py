@@ -10,7 +10,7 @@ python -m train.train_retarget \
     --batch_size 16 \
     --overwrite
 
-python -m train.train_retarget --model_prefix retarget_alligator --batch_size 16 --overwrite --ml_platform_type Tensorboard
+python -m train.train_retarget --model_prefix retarget_alligator --overwrite --ml_platform_type TensorboardPlatform --batch_size 4 --device 4
 """
 import sys
 import os
@@ -30,7 +30,7 @@ def main():
 
     args.source_skeleton = "Alligator"
     args.target_skeletons = ["Alligator"]
-    args.save_interval = 100  # 10000
+    args.save_interval = 1000  # 10000
     # args.batch_size = 1 # TODO
 
     # Setup save directory

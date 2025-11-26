@@ -83,8 +83,8 @@ class RetargetTrainLoop:
             gamma=0.99
         )
 
-        if self.resume_step:
-            self._load_optimizer_state()
+        # if self.resume_step:
+        #     self._load_optimizer_state()
 
         # Device
         self.device = torch.device("cuda")
@@ -148,9 +148,10 @@ class RetargetTrainLoop:
         """Main training loop"""
         print('train steps:', self.num_steps)
         # torch.multiprocessing.set_start_method('spawn')
+        self.epoch = 0
 
         while self.total_step() < self.num_steps:
-            print(f'Starting a new epoch at step {self.total_step()}')
+            print(f'Starting a new epoch {self.epoch} at step {self.total_step()}')
 
             for batch_data in tqdm(self.data):
                 if not (not self.lr_anneal_steps or self.total_step() < self.lr_anneal_steps):
@@ -159,6 +160,7 @@ class RetargetTrainLoop:
                 # Unpack retargeting batch
                 # batch_data = (source_data, target_data, source_kwargs, target_kwargs, metadata)
                 source_tuple, target_tuple, source_kwargs, target_kwargs, metadata = batch_data
+                # print("metadata:", metadata)
 
                 # Unpack tuples from truebones_batch_collate
                 source_motion, source_cond = source_tuple
@@ -203,9 +205,12 @@ class RetargetTrainLoop:
                                 group_name='Loss'
                             )
 
+                # Render source motion
+                if self.epoch==0:
+                    self._save_sources_from_batch(batch_data)
+                    
                 # Save checkpoint
-                if (self.total_step() % self.save_interval == 0 and self.total_step() != 0) or \
-                   self.total_step() == self.num_steps - 1:
+                if (self.total_step() % self.save_interval == 0) or self.total_step() == self.num_steps - 1: # and self.total_step() != 0
                     self.save()
 
                     # Visualize 
@@ -231,6 +236,7 @@ class RetargetTrainLoop:
 
             if not (not self.lr_anneal_steps or self.total_step() < self.lr_anneal_steps):
                 break
+            self.epoch += 1
 
     def total_step(self):
         """Get total training steps including resumed steps"""
@@ -386,6 +392,66 @@ class RetargetTrainLoop:
 
         return pjoin(self.args.save_dir, models[max(models)]) if models else None
 
+    def _save_sources_from_batch(self, batch_data):
+        """Save sources from current batch"""
+        from pathlib import Path
+        import numpy as np
+        
+        # Unpack
+        source_tuple, target_tuple, _, _, metadata = batch_data
+        source_motion, source_cond = source_tuple
+        
+        # Load cond_dict
+        from data_loaders.truebones.truebones_utils.get_opt import get_opt
+        opt = get_opt(self.device)
+        cond_dict_full = np.load(opt.cond_file, allow_pickle=True).item()
+        
+        vis_dir = Path(self.save_dir) / 'visualizations' / 'all_sources'
+        vis_dir.mkdir(parents=True, exist_ok=True)
+        
+        # Move to device
+        source_motion = source_motion.to(self.device)
+        batch_size = source_motion.shape[0]
+        
+        # Save each source
+        for i in range(batch_size):
+            skeleton_type = metadata['target_types'][i]
+            action_name = metadata['action_names'][i]
+            source_name = f"{skeleton_type}_{action_name}"
+            src_path = vis_dir / source_name
+            
+            # Skip if exists
+            if src_path.with_suffix('.mp4').exists():
+                continue
+            
+            # Get motion and skeleton info
+            source = source_motion[i]
+            n_joints = source_cond['y']['n_joints'][i].item()
+            source = source[:n_joints]
+            
+            parents = source_cond['y']['parents'][i].tolist()
+            mean_full = source_cond['y']['mean'][i].cpu().numpy()
+            std_full = source_cond['y']['std'][i].cpu().numpy()
+            mean = mean_full[:n_joints]
+            std = std_full[:n_joints]
+            
+            offsets = cond_dict_full[skeleton_type]['offsets']
+            joints_names = cond_dict_full[skeleton_type]['joints_names']
+            
+            # Save
+            save_motion_with_visualization(
+                source,
+                parents,
+                offsets,
+                mean,
+                std,
+                joints_names,
+                skeleton_type,
+                str(src_path),
+                fps=30,
+                title=f'Source - {skeleton_type} - {action_name}'
+            )
+            print(f"  ✅ Saved source: {source_name}")
 
 def parse_resume_step_from_filename(filename):
     """
@@ -452,17 +518,17 @@ def save_motion_with_visualization(
     global_positions = recover_from_bvh_ric_np(motion_denorm)
 
     # Create BVH animation using inverse kinematics
-    out_anim, _, _ = animation_from_positions(
-        positions=global_positions,
-        parents=parents,
-        offsets=offsets,
-        iterations=150
-    )
+    # out_anim, _, _ = animation_from_positions(
+    #     positions=global_positions,
+    #     parents=parents,
+    #     offsets=offsets,
+    #     iterations=150
+    # )
 
-    # Save NPY
-    npy_path = save_path + '.npy'
-    np.save(npy_path, motion_denorm)
-    print(f"  💾 Saved NPY: {npy_path}")
+    # # Save NPY
+    # npy_path = save_path + '.npy'
+    # np.save(npy_path, motion_denorm)
+    # print(f"  💾 Saved NPY: {npy_path}")
 
     # Save MP4
     mp4_path = save_path + '.mp4'
@@ -475,18 +541,18 @@ def save_motion_with_visualization(
     )
     print(f"  🎥 Saved MP4: {mp4_path}")
 
-    # Save BVH
-    if out_anim is not None:
-        bvh_path = save_path + '.bvh'
-        BVH.save(bvh_path, out_anim, joints_names)
-        print(f"  📁 Saved BVH: {bvh_path}")
+    # # Save BVH
+    # if out_anim is not None:
+    #     bvh_path = save_path + '.bvh'
+    #     BVH.save(bvh_path, out_anim, joints_names)
+    #     print(f"  📁 Saved BVH: {bvh_path}")
 
-    return {
-        'npy': npy_path,
-        'mp4': mp4_path,
-        'bvh': bvh_path if out_anim is not None else None,
-        'positions': global_positions
-    }
+    # return {
+    #     'npy': npy_path,
+    #     'mp4': mp4_path,
+    #     'bvh': bvh_path if out_anim is not None else None,
+    #     'positions': global_positions
+    # }
 
 
 def save_training_visualization(
@@ -626,39 +692,6 @@ def save_training_visualization(
                 fps=fps,
                 title=f'Generated - {skeleton_type} - Step {step}'
             )
-
-            # Save ground truth
-            if step == 0:
-                gt_path = vis_dir / f"{base_name}_groundtruth"
-                print(f"\n  📦 Ground truth:")
-                save_motion_with_visualization(
-                    ground_truth,
-                    parents,
-                    offsets,
-                    mean,
-                    std,
-                    joints_names,
-                    skeleton_type,
-                    str(gt_path),
-                    fps=fps,
-                    title=f'Ground Truth - {skeleton_type}'
-                )
-
-                # Save source motion
-                src_path = vis_dir / f"{base_name}_source"
-                print(f"\n  📦 Source motion:")
-                save_motion_with_visualization(
-                    source,
-                    parents,
-                    offsets,
-                    mean,
-                    std,
-                    joints_names,
-                    skeleton_type,
-                    str(src_path),
-                    fps=fps,
-                    title=f'Source - {skeleton_type}'
-                )
 
             print(f"\n  ✅ Sample {i} completed!")
 
