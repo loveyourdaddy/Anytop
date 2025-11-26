@@ -60,7 +60,7 @@ class RetargetTrainLoop:
         self.overwrite = args.overwrite
 
         # Load checkpoint if exists
-        self._load_and_sync_parameters()
+        # self._load_and_sync_parameters()
 
         # Mixed precision trainer
         self.mp_trainer = MixedPrecisionTrainer(

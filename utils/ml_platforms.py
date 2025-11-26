@@ -48,7 +48,7 @@ class ClearmlPlatform(MLPlatform):
 
 
 class TensorboardPlatform(MLPlatform):
-    def __init__(self, *args, **kwargs):
+    def __init__(self, save_dir, *args, **kwargs):
         super().__init__(*args, **kwargs)
         from torch.utils.tensorboard import SummaryWriter
         self.writer = SummaryWriter(log_dir=save_dir)

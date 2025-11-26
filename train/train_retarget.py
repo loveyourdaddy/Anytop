@@ -10,7 +10,7 @@ python -m train.train_retarget \
     --batch_size 16 \
     --overwrite
 
-python -m train.train_retarget --model_prefix retarget_alligator --batch_size 16 --overwrite
+python -m train.train_retarget --model_prefix retarget_alligator --batch_size 16 --overwrite --ml_platform_type Tensorboard
 """
 import sys
 import os
