@@ -10,7 +10,7 @@ python -m train.train_retarget \
     --batch_size 16 \
     --overwrite
 
-python -m train.train_retarget --model_prefix retarget_alligator --overwrite --ml_platform_type TensorboardPlatform --batch_size 4 --device 4
+python -m train.train_retarget --model_prefix retarget_brownbear --overwrite --ml_platform_type TensorboardPlatform --batch_size 1 --device 4
 """
 import sys
 import os
@@ -28,8 +28,8 @@ def main():
     args = train_args()
     fixseed(args.seed)
 
-    args.source_skeleton = "Alligator"
-    args.target_skeletons = ["Alligator"]
+    args.source_skeleton = "BrownBear" # Bear
+    args.target_skeletons = [args.source_skeleton] #"bear" 
     args.save_interval = 1000  # 10000
     # args.batch_size = 1 # TODO
 

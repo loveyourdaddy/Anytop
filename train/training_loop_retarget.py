@@ -149,6 +149,7 @@ class RetargetTrainLoop:
         print('train steps:', self.num_steps)
         # torch.multiprocessing.set_start_method('spawn')
         self.epoch = 0
+        self.save_source_motions = True 
 
         while self.total_step() < self.num_steps:
             print(f'Starting a new epoch {self.epoch} at step {self.total_step()}')
@@ -206,7 +207,7 @@ class RetargetTrainLoop:
                             )
 
                 # Render source motion
-                if self.epoch==0:
+                if self.epoch==0 and self.save_source_motions:
                     self._save_sources_from_batch(batch_data)
                     
                 # Save checkpoint

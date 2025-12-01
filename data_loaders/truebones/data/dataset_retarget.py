@@ -97,7 +97,6 @@ class RetargetDataset(Dataset):
         print(f"RetargetDataset: {len(self.motion_pairs)} motion pairs loaded")
 
         # TODO : 첫번째 페어만 사용 (일단 1개 모션만 학습)
-        # breakpoint()
         # for motion in self.motion_pairs:
         #     if motion['action_name'] == 'Dash':
         #         self.motion_pairs = [motion]
