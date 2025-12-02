@@ -116,6 +116,11 @@ def truebones_batch_collate(batch):
         max_len, n_joints, n_feats = b[0].shape
         # print("max_len, n_joints, n_feats:", max_len, n_joints, n_feats)
         tpos_first_frame = torch.zeros((max_joints, n_feats))
+        
+        if n_joints != b[3].shape[0]:
+            print(f"object_type {b[8]}: n_joints {n_joints} vs tpos_first_frame {b[3].shape[0]}")
+            raise ValueError("n_joints does not match tpos_first_frame length")
+
         tpos_first_frame[:n_joints] = torch.tensor(b[3])
         motion = torch.zeros((max_len, max_joints, n_feats))  # (frames, max_joints, feature_len)
         motion[:, :b[0].shape[1], :] = torch.tensor(b[0])

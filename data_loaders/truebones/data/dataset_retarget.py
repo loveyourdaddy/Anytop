@@ -54,7 +54,7 @@ class RetargetDataset(Dataset):
         cond_file = self.opt.cond_file
         cond_dict_full = np.load(cond_file, allow_pickle=True).item()
 
-        # ✅ Filter to only include source_skeleton (and target_skeletons if specified)
+        # Filter to only include source_skeleton (and target_skeletons if specified)
         if self.source_skeleton:
             skeleton_types_to_keep = [self.source_skeleton]
             if self.target_skeletons:
@@ -65,11 +65,9 @@ class RetargetDataset(Dataset):
                 k: v for k, v in cond_dict_full.items()
                 if k in skeleton_types_to_keep
             }
-            print(f"Filtered cond_dict to {len(self.cond_dict)} skeleton types: {list(self.cond_dict.keys())}")
         else:
             # Use all skeletons
             self.cond_dict = cond_dict_full
-            print(f"Using all {len(self.cond_dict)} skeleton types")
 
         # Initialize T5 conditioner
         self.t5_conditioner = T5Conditioner(
@@ -84,24 +82,18 @@ class RetargetDataset(Dataset):
         self.motion_pairs = []
         self._build_motion_pairs()
 
-        # ✅ Pre-compute and cache T5 embeddings for all skeletonsjoints
-        print("Pre-computing T5 embeddings for all skeletons...")
-        # cond_dict = self.cond_dict[args.source_skeleton]
-
+        # joint name embeddings (cache)
         self.joints_names_embs_cache = {}
         for skeleton_type in self.cond_dict.keys():
             joints_names = self.cond_dict[skeleton_type]['joints_names']
             joints_names_padded = joints_names + [None] * (self.opt.max_joints - len(joints_names))
             self.joints_names_embs_cache[skeleton_type] = self._encode_joints_names(joints_names_padded)
-        print(f"Cached embeddings for {len(self.joints_names_embs_cache)} skeleton types")
-        print(f"RetargetDataset: {len(self.motion_pairs)} motion pairs loaded")
 
         # TODO : 첫번째 페어만 사용 (일단 1개 모션만 학습)
         # for motion in self.motion_pairs:
         #     if motion['action_name'] == 'Dash':
         #         self.motion_pairs = [motion]
         #         break
-        
         # self.motion_pairs = self.motion_pairs[:1]
 
     def _build_motion_pairs(self):
@@ -113,7 +105,7 @@ class RetargetDataset(Dataset):
 
         # Determine which skeletons to use
         if self.source_skeleton and self.target_skeletons:
-            skeleton_types = [self.source_skeleton] + self.target_skeletons
+            skeleton_types = [self.source_skeleton] + self.target_skeletons  # source + targets
         else:
             # Use all available skeletons
             skeleton_types = list(self.cond_dict.keys())
@@ -122,22 +114,17 @@ class RetargetDataset(Dataset):
         from data_loaders.truebones.truebones_utils.get_opt import get_opt
         opt = get_opt('cuda')
         motions_dir = opt.motion_dir
-
         if not os.path.exists(motions_dir):
             raise FileNotFoundError(f"Motion directory not found: {motions_dir}")
 
-        print(f"Scanning motion directory: {motions_dir}")
-
         # Scan all motion files
         all_files = [f for f in os.listdir(motions_dir) if f.endswith('.npy')]
-        print(f"Found {len(all_files)} motion files")
+        print(f"    Found {len(all_files)} motion files in {motions_dir}")
 
+        # 모든 모션파일에서 source_type이 있는것을 찾기
         for motion_file in all_files:
-            # Extract skeleton type and action from filename
-            # Format: SkeletonType_SkeletonType_Action_ID.npy
-            # e.g., "Horse_Horse_Idle_428.npy"
+            # Format: SkeletonType_SkeletonType_Action_ID.npy (e.g., "Horse_Horse_Idle_428.npy")
             parts = motion_file.replace('.npy', '').replace('.npz', '').split('_')
-
             if len(parts) < 3:
                 continue
 
@@ -152,19 +139,14 @@ class RetargetDataset(Dataset):
                 motion_dict[action_name] = []
             motion_dict[action_name].append((skeleton_type, motion_path))
 
-        print(f"Grouped into {len(motion_dict)} unique actions")
+        if len(motion_dict) == 0:
+            print(f">> No motions found for {skeleton_types}")
+            return
 
         # Create pairs from same actions across different skeletons
         for action_name, skeleton_motions in motion_dict.items():
-            # if len(skeleton_motions) < 2:
-            #     continue
-
-            # Create pairs
             for i, (source_type, source_path) in enumerate(skeleton_motions):
                 for target_type, target_path in skeleton_motions:
-                    # if source_type == target_type:
-                    #     continue
-
                     # If specific source/target skeletons are specified, filter
                     if self.source_skeleton and source_type != self.source_skeleton:
                         continue
@@ -178,6 +160,7 @@ class RetargetDataset(Dataset):
                         'target_type': target_type,
                         'action_name': action_name
                     })
+        print(f"    Built {len(self.motion_pairs)} motion pairs")
 
     def _load_motion(self, motion_path, skeleton_type):
         """Load and preprocess motion data"""

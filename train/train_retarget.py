@@ -9,8 +9,10 @@ python -m train.train_retarget \
     --model_prefix retarget_alligator \
     --batch_size 16 \
     --overwrite
+python -m train.train_retarget --model_prefix retarget_brownbear --overwrite --ml_platform_type TensorboardPlatform --batch_size 1
 
-python -m train.train_retarget --model_prefix retarget_brownbear --overwrite --ml_platform_type TensorboardPlatform --batch_size 1 --device 4
+Group 
+python -m train.train_retarget --model_prefix retarget_quadropeds --overwrite --ml_platform_type TensorboardPlatform --batch_size 1 
 """
 import sys
 import os
@@ -28,8 +30,12 @@ def main():
     args = train_args()
     fixseed(args.seed)
 
-    args.source_skeleton = "BrownBear" # Bear
-    args.target_skeletons = [args.source_skeleton] #"bear" 
+    #  Use existing groups!
+    args.source_group = "quadropeds"  # or "bipeds", "all", etc.
+    # args.source_skeletons = ["BrownBear", "Dog"]  # Or custom list
+    # args.source_skeleton = "BrownBear" # Bear
+    # args.target_skeletons = [args.source_skeleton] #"bear"
+
     args.save_interval = 1000  # 10000
     # args.batch_size = 1 # TODO
 
@@ -64,16 +70,28 @@ def main():
         json.dump(vars(args), fw, indent=4, sort_keys=True)
 
     dist_util.setup_dist(args.device)
-
     print("creating retargeting data loader...")
+
+    # single
+    # data = get_retarget_dataset_loader(
+    #     args,
+    #     batch_size=args.batch_size,
+    #     num_frames=args.num_frames,
+    #     temporal_window=args.temporal_window,
+    #     t5_name=args.t5_name,
+    #     source_skeleton=args.source_skeleton,
+    #     target_skeletons=args.target_skeletons,
+    # )
+    
+    # group
     data = get_retarget_dataset_loader(
         args,
         batch_size=args.batch_size,
         num_frames=args.num_frames,
         temporal_window=args.temporal_window,
         t5_name=args.t5_name,
-        source_skeleton=args.source_skeleton,
-        target_skeletons=args.target_skeletons,
+        source_group=getattr(args, 'source_group', None),
+        source_skeletons=getattr(args, 'source_skeletons', None),
     )
 
     print("creating model and diffusion...")

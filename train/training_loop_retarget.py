@@ -149,7 +149,7 @@ class RetargetTrainLoop:
         print('train steps:', self.num_steps)
         # torch.multiprocessing.set_start_method('spawn')
         self.epoch = 0
-        self.save_source_motions = True 
+        self.save_source_motions = False  # True
 
         while self.total_step() < self.num_steps:
             print(f'Starting a new epoch {self.epoch} at step {self.total_step()}')
@@ -207,14 +207,14 @@ class RetargetTrainLoop:
                             )
 
                 # Render source motion
-                if self.epoch==0 and self.save_source_motions:
+                if self.epoch == 0 and self.save_source_motions:
                     self._save_sources_from_batch(batch_data)
-                    
+
                 # Save checkpoint
-                if (self.total_step() % self.save_interval == 0) or self.total_step() == self.num_steps - 1: # and self.total_step() != 0
+                if (self.total_step() % self.save_interval == 0) or self.total_step() == self.num_steps - 1:  # and self.total_step() != 0
                     self.save()
 
-                    # Visualize 
+                    # Visualize
                     save_training_visualization(
                         model=self.model,
                         diffusion=self.diffusion,
@@ -397,48 +397,48 @@ class RetargetTrainLoop:
         """Save sources from current batch"""
         from pathlib import Path
         import numpy as np
-        
+
         # Unpack
         source_tuple, target_tuple, _, _, metadata = batch_data
         source_motion, source_cond = source_tuple
-        
+
         # Load cond_dict
         from data_loaders.truebones.truebones_utils.get_opt import get_opt
         opt = get_opt(self.device)
         cond_dict_full = np.load(opt.cond_file, allow_pickle=True).item()
-        
+
         vis_dir = Path(self.save_dir) / 'visualizations' / 'all_sources'
         vis_dir.mkdir(parents=True, exist_ok=True)
-        
+
         # Move to device
         source_motion = source_motion.to(self.device)
         batch_size = source_motion.shape[0]
-        
+
         # Save each source
         for i in range(batch_size):
             skeleton_type = metadata['target_types'][i]
             action_name = metadata['action_names'][i]
             source_name = f"{skeleton_type}_{action_name}"
             src_path = vis_dir / source_name
-            
+
             # Skip if exists
             if src_path.with_suffix('.mp4').exists():
                 continue
-            
+
             # Get motion and skeleton info
             source = source_motion[i]
             n_joints = source_cond['y']['n_joints'][i].item()
             source = source[:n_joints]
-            
+
             parents = source_cond['y']['parents'][i].tolist()
             mean_full = source_cond['y']['mean'][i].cpu().numpy()
             std_full = source_cond['y']['std'][i].cpu().numpy()
             mean = mean_full[:n_joints]
             std = std_full[:n_joints]
-            
+
             offsets = cond_dict_full[skeleton_type]['offsets']
             joints_names = cond_dict_full[skeleton_type]['joints_names']
-            
+
             # Save
             save_motion_with_visualization(
                 source,
@@ -453,6 +453,7 @@ class RetargetTrainLoop:
                 title=f'Source - {skeleton_type} - {action_name}'
             )
             print(f"  ✅ Saved source: {source_name}")
+
 
 def parse_resume_step_from_filename(filename):
     """
