@@ -149,7 +149,7 @@ class RetargetTrainLoop:
         print('train steps:', self.num_steps)
         # torch.multiprocessing.set_start_method('spawn')
         self.epoch = 0
-        self.save_source_motions = False  # True
+        self.save_source_motions = True  # False
 
         while self.total_step() < self.num_steps:
             print(f'Starting a new epoch {self.epoch} at step {self.total_step()}')
@@ -208,7 +208,7 @@ class RetargetTrainLoop:
 
                 # Render source motion
                 if self.epoch == 0 and self.save_source_motions:
-                    self._save_sources_from_batch(batch_data)
+                    save_all_source_motions(data_loader=self.data, save_dir=self.save_dir, device=self.device, fps=30, max_motions=None)
 
                 # Save checkpoint
                 if (self.total_step() % self.save_interval == 0) or self.total_step() == self.num_steps - 1:  # and self.total_step() != 0
@@ -483,6 +483,253 @@ def log_loss_dict(diffusion, ts, losses):
 # # Motion saving and visualization functions
 
 
+def save_all_source_motions(
+    data_loader,
+    save_dir,
+    device,
+    fps=30,
+    max_motions=None
+):
+    """
+    Save all source motions from the dataset for visualization.
+
+    Creates MP4 videos for every source motion in the dataset.
+    Useful for inspection and debugging.
+
+    Args:
+        data_loader: DataLoader containing motion pairs
+        save_dir: Base directory to save files
+        device: torch device
+        fps: Frames per second for videos
+        max_motions: Maximum number of motions to save (None = all)
+
+    Returns:
+        Dict with statistics about saved motions
+    """
+    print(f"\n{'='*80}")
+    print(f"SAVING ALL SOURCE MOTIONS")
+    print(f"{'='*80}")
+
+    # Create save directory
+    vis_dir = Path(save_dir) / 'visualizations' / 'all_sources'
+    vis_dir.mkdir(parents=True, exist_ok=True)
+
+    # Load skeleton metadata
+    from data_loaders.truebones.truebones_utils.get_opt import get_opt
+    opt = get_opt(device)
+    cond_dict_full = np.load(opt.cond_file, allow_pickle=True).item()
+
+    # Statistics
+    stats = {
+        'total_processed': 0,
+        'newly_saved': 0,
+        'skipped_existing': 0,
+        'errors': 0,
+        'skeletons': {},
+    }
+
+    print(f"\n📁 Save directory: {vis_dir}")
+    print(f"🔄 Iterating through dataset...")
+    print()
+
+    # Iterate through dataset
+    motion_count = 0
+
+    for batch_idx, batch_data in enumerate(tqdm(data_loader, desc="Processing batches")):
+        # try:
+        # Unpack batch
+        source_tuple, target_tuple, _, _, metadata = batch_data
+        source_motion, source_cond = source_tuple
+
+        # Move to device
+        source_motion = source_motion.to(device)
+        batch_size = source_motion.shape[0]
+
+        # Process each sample in batch
+        for i in range(batch_size):
+            # Check max_motions limit
+            if max_motions is not None and motion_count >= max_motions:
+                print(f"\n⏹️  Reached max_motions limit ({max_motions})")
+                break
+
+            # Get metadata
+            skeleton_type = metadata['target_types'][i]
+            action_name = metadata['action_names'][i]
+
+            # Track skeleton
+            if skeleton_type not in stats['skeletons']:
+                stats['skeletons'][skeleton_type] = 0
+            stats['skeletons'][skeleton_type] += 1
+
+            # Create filename
+            source_name = f"{skeleton_type}_{action_name}"
+            src_path = vis_dir / source_name
+
+            # Check if already exists
+            if src_path.with_suffix('.mp4').exists():
+                stats['skipped_existing'] += 1
+                continue
+
+            # Get motion
+            source = source_motion[i]
+            n_joints = source_cond['y']['n_joints'][i].item()
+            source = source[:n_joints]  # Trim to actual joints
+
+            # Get skeleton info
+            parents = source_cond['y']['parents'][i]
+            parents = parents[:n_joints]  # Trim: 맞는지 확인 필요
+
+            mean_full = source_cond['y']['mean'][i].cpu().numpy()
+            std_full = source_cond['y']['std'][i].cpu().numpy()
+            mean = mean_full[:n_joints]
+            std = std_full[:n_joints]
+
+            offsets = cond_dict_full[skeleton_type]['offsets']
+            joints_names = cond_dict_full[skeleton_type]['joints_names']
+
+            # Save motion
+            breakpoint()
+            save_motion_with_visualization(
+                source.cpu(),
+                parents,
+                offsets,
+                mean,
+                std,
+                joints_names,
+                skeleton_type,
+                str(src_path),
+                fps=fps,
+                title=f'Source - {skeleton_type} - {action_name}'
+            )
+            stats['newly_saved'] += 1
+            print(f"  ✅ Saved: {source_name}")
+
+            stats['total_processed'] += 1
+            motion_count += 1
+
+        # Check max_motions limit
+        if max_motions is not None and motion_count >= max_motions:
+            break
+
+    # Print summary
+    print(f"\n{'='*80}")
+    print(f"SUMMARY")
+    print(f"{'='*80}")
+    print(f"  📊 Total processed: {stats['total_processed']}")
+    print(f"  ✅ Newly saved: {stats['newly_saved']}")
+    print(f"  ⏭️  Skipped (existing): {stats['skipped_existing']}")
+    print(f"  ❌ Errors: {stats['errors']}")
+    print(f"\n  📁 Saved to: {vis_dir}")
+
+    if stats['skeletons']:
+        print(f"\n  Motions per skeleton:")
+        for skel in sorted(stats['skeletons'].keys()):
+            count = stats['skeletons'][skel]
+            print(f"    {skel}: {count} motions")
+
+    print(f"{'='*80}\n")
+
+    return stats
+
+
+# # ============================================================================
+# # Add to RetargetTrainLoop class
+# # ============================================================================
+
+# class RetargetTrainLoop:
+#     # ... existing code ...
+
+#     def run_loop(self):
+#         """Main training loop"""
+#         print('train steps:', self.num_steps)
+
+#         # ✅ Save all source motions at step 0
+#         if self.total_step() == 0 and self.resume_step == 0:
+#             print("\n" + "="*80)
+#             print("📦 SAVING ALL SOURCE MOTIONS (Step 0)")
+#             print("="*80 + "\n")
+
+#             save_all_source_motions(
+#                 data_loader=self.data,
+#                 save_dir=self.save_dir,
+#                 device=self.device,
+#                 fps=30,
+#                 max_motions=None  # Save all (or set a limit like 100)
+#             )
+
+#         self.epoch = 0
+
+#         while self.total_step() < self.num_steps:
+#             print(f'Starting epoch {self.epoch} at step {self.total_step()}')
+
+#             for batch_data in tqdm(self.data):
+#                 # ... existing training loop ...
+
+#                 # Run training step
+#                 self.run_step(target_motion, cond)
+
+#                 # ... rest of code ...
+
+#                 self.step += 1
+
+#                 if self.total_step() == self.num_steps:
+#                     break
+
+#             self.epoch += 1
+
+
+# # ============================================================================
+# # Standalone usage (for testing)
+# # ============================================================================
+
+# def test_save_all_sources():
+#     """
+#     Test function to save all source motions without training.
+#     Run this directly to just generate visualizations.
+#     """
+#     import torch
+#     from utils.parser_util import train_args
+#     from data_loaders.get_data_retarget import get_retarget_dataset_loader
+
+#     # Setup
+#     args = train_args()
+#     args.source_group = "quadropeds"
+#     args.reconstruction_mode = True
+#     args.batch_size = 16
+#     args.num_frames = 120
+#     args.temporal_window = 31
+#     args.t5_name = 't5-base'
+
+#     # Get data loader
+#     print("Creating data loader...")
+#     data = get_retarget_dataset_loader(
+#         args,
+#         batch_size=args.batch_size,
+#         num_frames=args.num_frames,
+#         temporal_window=args.temporal_window,
+#         t5_name=args.t5_name,
+#         source_group=args.source_group,
+#         reconstruction_mode=args.reconstruction_mode,
+#     )
+
+#     # Setup device
+#     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+
+#     # Save all sources
+#     save_dir = './source_visualizations'
+
+#     stats = save_all_source_motions(
+#         data_loader=data,
+#         save_dir=save_dir,
+#         device=device,
+#         fps=30,
+#         max_motions=None  # Save all
+#     )
+
+#     print("\n✅ Done!")
+#     print(f"Check visualizations in: {save_dir}/visualizations/all_sources/")
+
+
 def save_motion_with_visualization(
     motion,
     parents,
@@ -519,19 +766,6 @@ def save_motion_with_visualization(
     # Recover 3D positions from rotation representation
     global_positions = recover_from_bvh_ric_np(motion_denorm)
 
-    # Create BVH animation using inverse kinematics
-    # out_anim, _, _ = animation_from_positions(
-    #     positions=global_positions,
-    #     parents=parents,
-    #     offsets=offsets,
-    #     iterations=150
-    # )
-
-    # # Save NPY
-    # npy_path = save_path + '.npy'
-    # np.save(npy_path, motion_denorm)
-    # print(f"  💾 Saved NPY: {npy_path}")
-
     # Save MP4
     mp4_path = save_path + '.mp4'
     plot_general_skeleton_3d_motion(
@@ -542,6 +776,19 @@ def save_motion_with_visualization(
         fps=fps
     )
     print(f"  🎥 Saved MP4: {mp4_path}")
+
+    # # Save NPY
+    # npy_path = save_path + '.npy'
+    # np.save(npy_path, motion_denorm)
+    # print(f"  💾 Saved NPY: {npy_path}")
+
+    # Create BVH animation using inverse kinematics
+    # out_anim, _, _ = animation_from_positions(
+    #     positions=global_positions,
+    #     parents=parents,
+    #     offsets=offsets,
+    #     iterations=150
+    # )
 
     # # Save BVH
     # if out_anim is not None:
@@ -692,7 +939,7 @@ def save_training_visualization(
                 skeleton_type,
                 str(gen_path),
                 fps=fps,
-                title=f'Generated - {skeleton_type} - Step {step}'
+                title=f'{action_name} - {skeleton_type} - Step {step}'
             )
 
             print(f"\n  ✅ Sample {i} completed!")
