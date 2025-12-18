@@ -211,7 +211,7 @@ class RetargetTrainLoop:
                     save_all_source_motions(data_loader=self.data, save_dir=self.save_dir, device=self.device, fps=30, max_motions=None)
 
                 # Save checkpoint
-                if (self.total_step() % self.save_interval == 0) or self.total_step() == self.num_steps - 1 and self.total_step() != 0:
+                if (self.total_step() % self.save_interval == 0 and self.total_step() != 0) or self.total_step() == self.num_steps - 1:
                     self.save()
 
                     # Visualize
@@ -855,5 +855,3 @@ def save_training_visualization(
                 break
         
     model.train()
-    breakpoint()
-    return vis_dir
