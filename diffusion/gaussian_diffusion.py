@@ -1561,6 +1561,7 @@ class GaussianDiffusion:
             }[self.model_mean_type]
             assert model_output.shape == target.shape == x_start.shape  # [bs, njoints, nfeats, nframes]
             
+            # print(f"timestep {t}")
             # 1. simple loss 
             # get ric positions befor denorm to care equally for all topologies
             terms["l_simple"] = self.temporal_spatial_masked_l2(target, model_output, mask, joints_mask, lengths, actual_joints)

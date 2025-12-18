@@ -12,7 +12,7 @@ python -m train.train_retarget \
 python -m train.train_retarget --model_prefix retarget_brownbear --overwrite --ml_platform_type TensorboardPlatform --batch_size 1
 
 Group 
-python -m train.train_retarget --model_prefix retarget_quadropeds --overwrite --ml_platform_type TensorboardPlatform --batch_size 1 
+python -m train.train_retarget --model_prefix retarget_quadropeds --lambda_geo 1.0 --overwrite --ml_platform_type TensorboardPlatform --batch_size 4
 """
 import sys
 import os
@@ -24,7 +24,7 @@ from train.training_loop_retarget import RetargetTrainLoop
 from data_loaders.get_data_retarget import get_retarget_dataset_loader
 from utils.model_util import create_model_and_diffusion_general_skeleton
 from utils.ml_platforms import ClearmlPlatform, TensorboardPlatform, NoPlatform, WandBPlatform
-
+import time
 
 def main():
     args = train_args()
@@ -32,12 +32,8 @@ def main():
 
     #  Use existing groups!
     args.source_group = "quadropeds"  # or "bipeds", "all", etc.
-    # args.source_skeletons = ["BrownBear", "Dog"]  # Or custom list
-    # args.source_skeleton = "BrownBear" # Bear
-    # args.target_skeletons = [args.source_skeleton] #"bear"
-
-    args.save_interval = 1000  # 10000
-    # args.batch_size = 1 # TODO
+    args.save_interval = 10000 # 1000
+    args.save_source_motions = False # True
 
     # Setup save directory
     save_dir = args.save_dir
@@ -49,8 +45,11 @@ def main():
         mod_list = [m for m in os.listdir(os.path.join(os.getcwd(), 'save')) if m.startswith(model_name)]
         if len(mod_list) > 0 and not args.overwrite:
             model_name = f'{model_name}_{len(mod_list)}'
+        curr_time = time.strftime("%Y%m%d", time.localtime())
+        model_name = curr_time + '_' + model_name
         save_dir = os.path.join(os.getcwd(), 'save', model_name)
         args.save_dir = save_dir
+    print("Save_dir to:", save_dir)
 
     # Setup ML platform for logging
     ml_platform_type = eval(args.ml_platform_type)
