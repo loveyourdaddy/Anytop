@@ -13,6 +13,14 @@ python -m train.train_retarget --model_prefix retarget_brownbear --overwrite --m
 
 Group 
 python -m train.train_retarget --model_prefix retarget_quadropeds --lambda_geo 1.0 --overwrite --ml_platform_type TensorboardPlatform --batch_size 4
+
+python -m train.train_retarget \
+    --model_prefix retarget_quadropeds \
+    --lambda_geo 1.0 \
+    --overwrite \
+    --batch_size 4
+
+    # --source_group quadropeds \
 """
 import sys
 import os

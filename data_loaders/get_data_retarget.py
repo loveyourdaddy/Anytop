@@ -172,11 +172,12 @@ def get_retarget_dataset_loader(
 
     datasets = []
 
-    for skeleton in skeletons:
-        source_skel = skeleton
-        target_skels = [skeleton]  # Same!
+    for source_skel in skeletons:
+        target_skels = [s for s in skeletons if s != source_skel]
+        if not target_skels:
+            continue
 
-        print(f"RetargetDataset of {source_skel}:")
+        print(f"RetargetDataset of {source_skel} -> {target_skels}:")
         dataset = RetargetDataset(
             args=args,
             data_root=data_dir,
