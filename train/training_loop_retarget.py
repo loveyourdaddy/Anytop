@@ -214,17 +214,17 @@ class RetargetTrainLoop:
                 if (self.total_step() % self.save_interval == 0 and self.total_step() != 0) or self.total_step() == self.num_steps - 1:
                     self.save()
 
-                    # # Visualize
-                    # save_training_visualization(
-                    #     model=self.model,
-                    #     diffusion=self.diffusion,
-                    #     data_loader=self.data,
-                    #     save_dir=self.save_dir,
-                    #     step=self.total_step(),
-                    #     device=self.device,
-                    #     max_samples=None,
-                    #     fps=30
-                    # )
+                    # Visualize and save bvh
+                    save_training_visualization(
+                        model=self.model,
+                        diffusion=self.diffusion,
+                        data_loader=self.data,
+                        save_dir=self.save_dir,
+                        step=self.total_step(),
+                        device=self.device,
+                        max_samples=None,
+                        fps=30
+                    )
 
                 # Integration test
                 if os.environ.get("DIFFUSION_TRAINING_TEST", "") and self.step > 0:
@@ -521,15 +521,15 @@ def save_visualization(
     global_positions = recover_from_bvh_ric_np(motion_denorm)
 
     # Save MP4
-    mp4_path = save_path + '.mp4'
-    plot_general_skeleton_3d_motion(
-        mp4_path,
-        parents,
-        global_positions,
-        title=title,
-        fps=fps
-    )
-    print(f"  🎥 Saved MP4: {mp4_path}")
+    # mp4_path = save_path + '.mp4'
+    # plot_general_skeleton_3d_motion(
+    #     mp4_path,
+    #     parents,
+    #     global_positions,
+    #     title=title,
+    #     fps=fps
+    # )
+    # print(f"  🎥 Saved MP4: {mp4_path}")
 
     # # Save NPY
     # npy_path = save_path + '.npy'
@@ -537,18 +537,18 @@ def save_visualization(
     # print(f"  💾 Saved NPY: {npy_path}")
 
     # Create BVH animation using inverse kinematics
-    # out_anim, _, _ = animation_from_positions(
-    #     positions=global_positions,
-    #     parents=parents,
-    #     offsets=offsets,
-    #     iterations=150
-    # )
+    out_anim, _, _ = animation_from_positions(
+        positions=global_positions,
+        parents=parents,
+        offsets=offsets,
+        iterations=150
+    )
 
-    # # Save BVH
-    # if out_anim is not None:
-    #     bvh_path = save_path + '.bvh'
-    #     BVH.save(bvh_path, out_anim, joints_names)
-    #     print(f"  📁 Saved BVH: {bvh_path}")
+    # Save BVH
+    if out_anim is not None:
+        bvh_path = save_path + '.bvh'
+        BVH.save(bvh_path, out_anim, joints_names)
+        print(f"  📁 Saved BVH: {bvh_path}")
 
     # return {
     #     'npy': npy_path,
