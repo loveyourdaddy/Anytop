@@ -168,9 +168,14 @@ def get_retarget_dataset_loader(
     print(f"{'='*80}\n")
 
     # Use existing RetargetDataset!
+    selected_source_skeleton = ['BrownBear'] # None # 1개를 선택하기 
     data_dir = getattr(args, 'data_dir', './dataset/truebones/zoo/truebones_processed')
     datasets = []
     for source_skel in skeletons:
+        # source skeleton을 지정해준다면
+        if source_skel not in selected_source_skeleton:
+            continue
+        
         # 지정된 group안에 있는 skeleton만 선택
         target_skels = [s for s in skeletons if s != source_skel]
         if not target_skels:

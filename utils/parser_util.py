@@ -86,7 +86,7 @@ def add_model_options(parser):
                        help="The probability of masking the condition during training."
                             " For classifier-free guidance learning.")
     group.add_argument("--lambda_fs", default=0.0, type=float, help="Foot contact loss.")
-    group.add_argument("--lambda_geo", default=0.0, type=float, help="Foot contact loss.")
+    group.add_argument("--lambda_geo", default=1.0, type=float, help="Foot contact loss.") # TODO: Tuning
     group.add_argument("--t5_name", default='t5-base', choices=["t5-small", "t5-base", "t5-large", "t5-3b", "t5-11b",
               "google/flan-t5-small", "google/flan-t5-base", "google/flan-t5-large",
               "google/flan-t5-xl", "google/flan-t5-xxl"], type=str,
@@ -111,6 +111,11 @@ def add_training_options(parser):
                        help="Path to save checkpoints and results.")
     group.add_argument("--model_prefix", type=str,
                        help="Unique string at the beggining of the model name.")
+    group.add_argument("--source_group", type=str,
+                       help="Unique string at the beggining of the model name.")
+    group.add_argument("--source_skeleton", type=str,
+                       help="Unique string at the beggining of the model name.")
+    
     group.add_argument("--overwrite", action='store_true',
                        help="If True, will enable to use an already existing save_dir.")
     group.add_argument("--ml_platform_type", default='NoPlatform', choices=['NoPlatform', 'ClearmlPlatform', 'TensorboardPlatform', 'WandBPlatform'], type=str,

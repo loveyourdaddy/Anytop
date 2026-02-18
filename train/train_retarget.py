@@ -11,14 +11,9 @@ python -m train.train_retarget \
     --overwrite
 python -m train.train_retarget --model_prefix retarget_brownbear --overwrite --ml_platform_type TensorboardPlatform --batch_size 1
 
-python -m train.train_retarget \
-    --lambda_geo 1.0 \
-    --overwrite \
-    --batch_size 1
+python -m train.train_retarget --overwrite --source_group quadropeds --batch_size 16
 
-    --model_prefix retarget_brownbear \
-    --source_skeleton brownbear \
-    --source_group quadropeds \
+--source_skeleton brownbear 
 """
 import sys
 import os
@@ -36,8 +31,7 @@ def main():
     args = train_args()
     fixseed(args.seed)
 
-    # source_grouop이나 source_skeleton은 설정되어야함
-    args.source_group = "quadropeds"  # or "bipeds", "all", etc.
+    # args에서 source_grouop이 설정되어야함
     args.save_source_motions = False # True
 
     # Setup save directory
