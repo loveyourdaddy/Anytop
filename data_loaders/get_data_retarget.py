@@ -169,10 +169,9 @@ def get_retarget_dataset_loader(
 
     # Use existing RetargetDataset!
     data_dir = getattr(args, 'data_dir', './dataset/truebones/zoo/truebones_processed')
-
     datasets = []
-
     for source_skel in skeletons:
+        # 지정된 group안에 있는 skeleton만 선택
         target_skels = [s for s in skeletons if s != source_skel]
         if not target_skels:
             continue

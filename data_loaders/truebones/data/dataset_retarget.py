@@ -144,15 +144,17 @@ class RetargetDataset(Dataset):
             return
 
         # Create pairs from same actions across different skeletons
-        for action_name, skeleton_motions in motion_dict.items():
+        for action_name, skeleton_motions in motion_dict.items(): # 'action', [('source_skeleton', 'motion'), ...]
             for i, (source_type, source_path) in enumerate(skeleton_motions):
+                # motiont의 source type이 지정된 source skeleton이 아니라면 제외 
+                if self.source_skeleton and source_type != self.source_skeleton:
+                    continue
                 for target_type, target_path in skeleton_motions:
-                    # If specific source/target skeletons are specified, filter
-                    if self.source_skeleton and source_type != self.source_skeleton:
-                        continue
+                    # target skeleton에 없다면 제외, source_type==target_type일 수 있음
                     if self.target_skeletons and target_type not in self.target_skeletons:
                         continue
 
+                    # 위 조건이 만족되었다면 motion_pairs로 등록
                     self.motion_pairs.append({
                         'source_path': source_path,
                         'source_type': source_type,

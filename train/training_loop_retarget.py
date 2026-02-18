@@ -360,6 +360,7 @@ class RetargetTrainLoop:
         opt_filepath = pjoin(self.save_dir, f"opt{(self.total_step()):09d}.pt")
         with open(opt_filepath, "wb") as f:
             torch.save(self.opt.state_dict(), f)
+        print(f"Checkpoint saved: {self.ckpt_file_name()}") # and optimizer state
 
     def find_resume_checkpoint(self) -> Optional[str]:
         """Find the latest checkpoint in save directory"""

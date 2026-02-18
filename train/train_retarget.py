@@ -11,16 +11,14 @@ python -m train.train_retarget \
     --overwrite
 python -m train.train_retarget --model_prefix retarget_brownbear --overwrite --ml_platform_type TensorboardPlatform --batch_size 1
 
-Group 
-python -m train.train_retarget --model_prefix retarget_quadropeds --lambda_geo 1.0 --overwrite --ml_platform_type TensorboardPlatform --batch_size 4
-
 python -m train.train_retarget \
-    --model_prefix retarget_quadropeds \
     --lambda_geo 1.0 \
     --overwrite \
-    --batch_size 4
+    --batch_size 1
 
-    # --source_group quadropeds \
+    --model_prefix retarget_brownbear \
+    --source_skeleton brownbear \
+    --source_group quadropeds \
 """
 import sys
 import os
@@ -38,9 +36,8 @@ def main():
     args = train_args()
     fixseed(args.seed)
 
-    #  Use existing groups!
+    # source_grouop이나 source_skeleton은 설정되어야함
     args.source_group = "quadropeds"  # or "bipeds", "all", etc.
-    args.save_interval = 10000 # 1000
     args.save_source_motions = False # True
 
     # Setup save directory
@@ -48,8 +45,10 @@ def main():
     if save_dir is None:
         prefix = "Retarget"
         if args.model_prefix is not None:
-            prefix = args.model_prefix
+            # prefix = args.model_prefix
+            prefix = "retarget_" + args.source_group
         model_name = f'{prefix}_dataset_truebones_bs_{args.batch_size}_latentdim_{args.latent_dim}'
+        
         mod_list = [m for m in os.listdir(os.path.join(os.getcwd(), 'save')) if m.startswith(model_name)]
         if len(mod_list) > 0 and not args.overwrite:
             model_name = f'{model_name}_{len(mod_list)}'
@@ -78,17 +77,10 @@ def main():
 
     dist_util.setup_dist(args.device)
     print("creating retargeting data loader...")
-
-    # single
-    # data = get_retarget_dataset_loader(
-    #     args,
-    #     batch_size=args.batch_size,
-    #     num_frames=args.num_frames,
-    #     temporal_window=args.temporal_window,
-    #     t5_name=args.t5_name,
-    #     source_skeleton=args.source_skeleton,
-    #     target_skeletons=args.target_skeletons,
-    # )
+    
+    # source_group이 none이거나, source_skeleton이 none이어야함
+    source_group = getattr(args, 'source_group', None)
+    source_skeletons = getattr(args, 'source_skeleton', None)
     
     # group
     data = get_retarget_dataset_loader(
@@ -97,8 +89,8 @@ def main():
         num_frames=args.num_frames,
         temporal_window=args.temporal_window,
         t5_name=args.t5_name,
-        source_group=getattr(args, 'source_group', None),
-        source_skeletons=getattr(args, 'source_skeletons', None),
+        source_group=source_group,
+        source_skeletons=source_skeletons,
     )
 
     print("creating model and diffusion...")
