@@ -2,18 +2,21 @@
 """
 Train a diffusion model for motion retargeting with reconstruction loss.
 
-python -m train.train_retarget --model_prefix retarget --overwrite
-    --source_skeleton Alligator --target_skeletons Alligator
+python -m train.train_retarget --model_prefix retarget --overwrite --source_skeleton Alligator --target_skeletons Alligator
+python -m train.train_retarget --overwrite --source_group quadropeds --batch_size 16
+--source_skeleton brownbear 
 
 python -m train.train_retarget \
-    --model_prefix retarget_alligator \
-    --batch_size 16 \
-    --overwrite
-python -m train.train_retarget --model_prefix retarget_brownbear --overwrite --ml_platform_type TensorboardPlatform --batch_size 1
+    --save_dir save/20260218_Retarget_dataset_truebones_bs_4_latentdim_128 \
+    --overwrite \
+    --resume_checkpoint save/20260218_Retarget_dataset_truebones_bs_4_latentdim_128/model000290000.pt \
+    --source_group quadropeds \
+    --batch_size 4
 
-python -m train.train_retarget --overwrite --source_group quadropeds --batch_size 16
 
---source_skeleton brownbear 
+/home/inseo/Github/BVHView/render_bvhs.sh /home/inseo/Github/Anytop/save/20260218_Retarget_dataset_truebones_bs_4_latentdim_128/visualizations/step000290001
+~/Github/BVHView/render_bvhs.sh ~/Github/Anytop/dataset/truebones/zoo/truebones_processed/bvhs/BrownBear
+~/Github/BVHView/render_bvhs.sh ~/Github/Anytop/save/20260218_Retarget_dataset_truebones_bs_4_latentdim_128/visualizations/step00029001
 """
 import sys
 import os
@@ -33,6 +36,7 @@ def main():
 
     # args에서 source_grouop이 설정되어야함
     args.save_source_motions = False # True
+    args.ml_platform_type = 'TensorboardPlatform' # 'ClearmlPlatform' # 'TensorboardPlatform' # 'WandBPlatform' # 'NoPlatform'
 
     # Setup save directory
     save_dir = args.save_dir

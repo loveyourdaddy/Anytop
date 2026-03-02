@@ -61,7 +61,7 @@ class RetargetTrainLoop:
         self.save_source_motions = args.save_source_motions
 
         # Load checkpoint if exists
-        # self._load_and_sync_parameters()
+        self._load_and_sync_parameters()
 
         # Mixed precision trainer
         self.mp_trainer = MixedPrecisionTrainer(
@@ -84,8 +84,8 @@ class RetargetTrainLoop:
             gamma=0.99
         )
 
-        # if self.resume_step:
-        #     self._load_optimizer_state()
+        if self.resume_step:
+            self._load_optimizer_state()
 
         # Device
         self.device = torch.device("cuda")
@@ -222,7 +222,6 @@ class RetargetTrainLoop:
                         save_dir=self.save_dir,
                         step=self.total_step(),
                         device=self.device,
-                        max_samples=None,
                         fps=30
                     )
 
@@ -706,7 +705,7 @@ def save_all_source_motions(
 
     return stats
 
-# save generated 
+# save generated
 def save_training_visualization(
     model,
     diffusion,
@@ -714,145 +713,131 @@ def save_training_visualization(
     save_dir,
     step,
     device,
-    max_samples=None,
     fps=30
 ):
     """
-    Generate and save motion visualization during training
-    Saves: Generated, Ground Truth, Source motions in NPY + MP4 + BVH
+    Generate and save motion visualization during training.
+    모든 source motion × 모든 target animal 조합에 대해 생성 결과를 저장한다.
 
-    Args:
-        model: Diffusion model
-        diffusion: Diffusion process
-        batch_data: Training batch (source_tuple, target_tuple, _, _, metadata) -> data_loader
-        save_dir: Directory to save files
-        step: Current training step
-        device: torch device
-        num_samples: Number of samples to generate (for visualization)
-        fps: Frames per second for video
+    data_loader.dataset(ConcatDataset)의 motion_pairs 전체를 셔플 없이 순회하며,
+    파일이 이미 존재하면 skip한다.
+
+    파일명: {source_type}_{action_name}_to_{target_type}.bvh
+    저장 경로: {save_dir}/visualizations/step{step:09d}/
     """
+    from torch.utils.data import DataLoader as TorchDataLoader
+
     print(f"\n{'='*80}")
     print(f"VISUALIZATIONS AT STEP {step}")
 
     model.eval()
 
-    
     # Create save directory
     vis_dir = Path(save_dir) / 'visualizations' / f'step{step:09d}'
     vis_dir.mkdir(parents=True, exist_ok=True)
-    
+
     # Load skeleton metadata
     from data_loaders.truebones.truebones_utils.get_opt import get_opt
     opt = get_opt(device)
     cond_dict_full = np.load(opt.cond_file, allow_pickle=True).item()
-    
-    # Statistics
-    stats = {
-        'total_generated': 0,
-        'skipped_existing': 0,
-        'skeletons': {}
-    }
-    
-    sample_count = 0
-    
+
+    # ── 평가 전용 DataLoader ──────────────────────────────────────────────────
+    # 학습용 DataLoader와 동일한 dataset/collate_fn을 사용하되,
+    # shuffle=False, drop_last=False 로 모든 pair를 빠짐없이 순회한다.
+    eval_loader = TorchDataLoader(
+        data_loader.dataset,
+        batch_size=data_loader.batch_size,
+        shuffle=False,
+        drop_last=False,
+        collate_fn=data_loader.collate_fn,
+        num_workers=0,
+    )
+
+    total_pairs = len(data_loader.dataset)
+    print(f"Dataset pairs: {total_pairs}  |  Batches: {len(eval_loader)}")
+    print(f"Save dir: {vis_dir}")
+
+    stats = {'generated': 0, 'skipped': 0, 'errors': 0}
+
     with torch.no_grad():
-        for batch_idx, batch_data in enumerate(tqdm(data_loader, desc=f"Step {step}")):
-            # Unpack batch
+        for batch_data in tqdm(eval_loader, desc=f"Visualize step {step}"):
             source_tuple, target_tuple, _, _, metadata = batch_data
             source_motion, source_cond = source_tuple
             target_motion, target_cond = target_tuple
 
-            # Prepare conditioning for generation
-            cond = {}
-            cond['y'] = {}
-            for k, v in target_cond['y'].items():
-                if torch.is_tensor(v):
-                    cond['y'][k] = v.to(device)
-                else:
-                    cond['y'][k] = v
+            # ── 이미 모든 파일이 존재하면 배치 전체 skip ────────────────────
+            batch_size = target_motion.shape[0]
+            filenames = [
+                f"{metadata['source_types'][i]}_{metadata['action_names'][i]}_to_{metadata['target_types'][i]}"
+                for i in range(batch_size)
+            ]
+            if all((vis_dir / fn).with_suffix('.bvh').exists() for fn in filenames):
+                stats['skipped'] += batch_size
+                continue
 
-            # Add source motion as conditioning
+            # ── Conditioning 구성 ────────────────────────────────────────────
+            cond = {'y': {}}
+            for k, v in target_cond['y'].items():
+                cond['y'][k] = v.to(device) if torch.is_tensor(v) else v
             cond['y']['source_motion'] = source_motion.to(device)
             cond['y']['source_type'] = metadata['source_types']
 
-            # Get shape info
-            batch_size = target_motion.shape[0]
             bs, max_joints, n_feats, n_frames = target_motion.shape
-            
-            # Sample from model using p_sample_loop
-            print(f"\n🎲 Sampling from diffusion model...")
+
+            # ── Diffusion sampling ───────────────────────────────────────────
             sample = diffusion.p_sample_loop(
                 model,
-                (batch_size, max_joints, n_feats, n_frames),
+                (bs, max_joints, n_feats, n_frames),
                 clip_denoised=False,
                 model_kwargs=cond,
                 skip_timesteps=0,
                 init_image=None,
-                progress=True,
+                progress=False,
                 dump_steps=None,
                 noise=None,
                 const_noise=False,
             )
 
-            # ✅ Save ALL samples in this batch
+            # ── 배치 내 각 샘플 저장 ─────────────────────────────────────────
             for i in range(batch_size):
-                # Check max_samples limit
-                if max_samples is not None and sample_count >= max_samples:
-                    print(f"\n⏹️  Reached max_samples limit ({max_samples})")
-                    break
-                
-                # Get metadata
-                skeleton_type = metadata['target_types'][i]
-                action_name = metadata['action_names'][i]
-                n_joints = cond['y']['n_joints'][i].item()
-                
-                # Track skeleton
-                if skeleton_type not in stats['skeletons']:
-                    stats['skeletons'][skeleton_type] = 0
-                stats['skeletons'][skeleton_type] += 1
-                
-                # Create filename
-                filename = f"sample{sample_count:04d}_{skeleton_type}_{action_name}"
-                save_path = vis_dir / filename
-                
-                # Check if exists
-                if save_path.with_suffix('.mp4').exists():
-                    stats['skipped_existing'] += 1
-                    sample_count += 1
+                source_type  = metadata['source_types'][i]
+                target_type  = metadata['target_types'][i]
+                action_name  = metadata['action_names'][i]
+                filename     = f"{source_type}_{action_name}_to_{target_type}"
+                save_path    = vis_dir / filename
+
+                # 이미 존재하면 skip
+                if save_path.with_suffix('.bvh').exists():
+                    stats['skipped'] += 1
                     continue
-                
-                # Get motions
-                generated_motion = sample[i][:n_joints]
-                # ground_truth = target_motion[i][:n_joints]
-                # source = source_motion[i][:n_joints]
-                
-                # Get skeleton info
-                parents = cond['y']['parents'][i][:n_joints]
-                mean = cond['y']['mean'][i].cpu().numpy()[:n_joints]
-                std = cond['y']['std'][i].cpu().numpy()[:n_joints]
-                
-                offsets = cond_dict_full[skeleton_type]['offsets']
-                joints_names = cond_dict_full[skeleton_type]['joints_names']
-                
-                # Save generated motion
-                save_visualization(
-                    generated_motion.cpu(),
-                    parents,
-                    offsets,
-                    mean,
-                    std,
-                    joints_names,
-                    skeleton_type,
-                    str(save_path) + '_generated',
-                    fps=fps,
-                    title=f'Generated - {skeleton_type} - {action_name} - Step {step}'
-                )
-                
-                stats['total_generated'] += 1
-                sample_count += 1
-            
-            # Check max_samples limit
-            if max_samples is not None and sample_count >= max_samples:
-                break
-        
+
+                n_joints = cond['y']['n_joints'][i].item()
+
+                try:
+                    save_visualization(
+                        motion=sample[i][:n_joints].cpu(),
+                        parents=cond['y']['parents'][i][:n_joints],
+                        offsets=cond_dict_full[target_type]['offsets'],
+                        mean=cond['y']['mean'][i].cpu().numpy()[:n_joints],
+                        std=cond['y']['std'][i].cpu().numpy()[:n_joints],
+                        joints_names=cond_dict_full[target_type]['joints_names'],
+                        object_type=target_type,
+                        save_path=str(save_path),
+                        fps=fps,
+                        title=f'{source_type} → {target_type} | {action_name} | step {step}'
+                    )
+                    stats['generated'] += 1
+                    print(f"  Saved: {filename}.bvh")
+                except Exception as e:
+                    stats['errors'] += 1
+                    print(f"  ERROR saving {filename}: {e}")
+
+    print(f"\n{'='*80}")
+    print(f"Step {step} visualization done")
+    print(f"  Generated : {stats['generated']}")
+    print(f"  Skipped   : {stats['skipped']}")
+    print(f"  Errors    : {stats['errors']}")
+    print(f"  Save dir  : {vis_dir}")
+    print(f"{'='*80}\n")
+
     model.train()
