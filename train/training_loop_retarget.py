@@ -179,10 +179,14 @@ class RetargetTrainLoop:
                         if torch.is_tensor(val):
                             cond['y'][key] = val.to(self.device)
 
-                # Add source motion as conditioning
-                source_motion = source_motion.to(self.device)  # ['motion']
-                cond['y']['source_motion'] = source_motion
-                cond['y']['source_type'] = metadata['source_types']
+                # Add source motion + source skeleton conditioning
+                source_motion = source_motion.to(self.device)
+                cond['y']['source_motion']           = source_motion
+                cond['y']['source_type']             = metadata['source_types']
+                cond['y']['source_tpos_first_frame'] = source_cond['y']['tpos_first_frame'].to(self.device)
+                cond['y']['source_joints_names_embs']= source_cond['y']['joints_names_embs'].to(self.device)
+                cond['y']['source_n_joints']         = source_cond['y']['n_joints'].to(self.device)
+                cond['y']['source_crop_start_ind']   = source_cond['y']['crop_start_ind'].to(self.device)
 
                 # Run training step
                 self.run_step(target_motion, cond)
@@ -281,6 +285,7 @@ class RetargetTrainLoop:
             t, weights = self.schedule_sampler.sample(micro.shape[0], dist_util.dev())
 
             # Compute losses
+            # breakpoint()
             compute_losses = functools.partial(
                 self.diffusion.training_losses,
                 self.ddp_model,
@@ -779,8 +784,12 @@ def save_training_visualization(
             cond = {'y': {}}
             for k, v in target_cond['y'].items():
                 cond['y'][k] = v.to(device) if torch.is_tensor(v) else v
-            cond['y']['source_motion'] = source_motion.to(device)
-            cond['y']['source_type'] = metadata['source_types']
+            cond['y']['source_motion']            = source_motion.to(device)
+            cond['y']['source_type']              = metadata['source_types']
+            cond['y']['source_tpos_first_frame']  = source_cond['y']['tpos_first_frame'].to(device)
+            cond['y']['source_joints_names_embs'] = source_cond['y']['joints_names_embs'].to(device)
+            cond['y']['source_n_joints']          = source_cond['y']['n_joints'].to(device)
+            cond['y']['source_crop_start_ind']    = source_cond['y']['crop_start_ind'].to(device)
 
             bs, max_joints, n_feats, n_frames = target_motion.shape
 

@@ -130,6 +130,76 @@ class GraphMultiHeadAttention(nn.Module):
         assert x.size() == orig_q_size
         return x
 
+class TposeCrossAttention(nn.Module):
+    """
+    Target T-pose와 source T-pose 사이의 joint 대응 관계를 학습한다.
+    출력 bias [bs, nheads, tgt_joints, src_joints]는 cross-motion attention의 prior로 사용된다.
+    """
+    def __init__(self, d_model, nheads):
+        super().__init__()
+        self.nheads = nheads
+        self.att_size = d_model // nheads
+        self.scale = self.att_size ** -0.5
+        self.q_proj = nn.Linear(d_model, d_model)
+        self.k_proj = nn.Linear(d_model, d_model)
+
+    def forward(self, tgt_tpose, src_tpose):
+        """
+        Args:
+            tgt_tpose: [bs, tgt_joints, d_model]
+            src_tpose: [bs, src_joints, d_model]
+        Returns:
+            bias: [bs, nheads, tgt_joints, src_joints]
+        """
+        bs, tgt_j, _ = tgt_tpose.shape
+        src_j = src_tpose.shape[1]
+        q = self.q_proj(tgt_tpose).view(bs, tgt_j, self.nheads, self.att_size).transpose(1, 2)
+        k = self.k_proj(src_tpose).view(bs, src_j, self.nheads, self.att_size).transpose(1, 2)
+        return torch.matmul(q, k.transpose(-2, -1)) * self.scale  # [bs, nheads, tgt_j, src_j]
+
+
+class CrossMotionAttention(nn.Module):
+    """
+    Target motion features(Q)가 source motion features(K, V)를 attend한다.
+    TposeCrossAttention으로 계산된 bias를 통해 T-pose 기반 joint 대응 관계가 반영된다.
+    """
+    def __init__(self, d_model, nheads, dropout=0.1):
+        super().__init__()
+        self.nheads = nheads
+        self.att_size = d_model // nheads
+        self.scale = self.att_size ** -0.5
+        self.q_proj = nn.Linear(d_model, d_model)
+        self.k_proj = nn.Linear(d_model, d_model)
+        self.v_proj = nn.Linear(d_model, d_model)
+        self.out_proj = nn.Linear(d_model, d_model)
+        self.dropout = nn.Dropout(dropout)
+
+    def forward(self, tgt, src, tpose_bias=None, src_mask=None):
+        """
+        Args:
+            tgt:        [B, tgt_j, d]
+            src:        [B, src_j, d]
+            tpose_bias: [B, nheads, tgt_j, src_j]  T-pose 대응 bias
+            src_mask:   [B, 1, 1, src_j]           padding 마스크 (-1e9)
+        Returns:
+            [B, tgt_j, d]
+        """
+        B, tgt_j, d = tgt.shape
+        src_j = src.shape[1]
+        q = self.q_proj(tgt).view(B, tgt_j, self.nheads, self.att_size).transpose(1, 2)
+        k = self.k_proj(src).view(B, src_j, self.nheads, self.att_size).transpose(1, 2)
+        v = self.v_proj(src).view(B, src_j, self.nheads, self.att_size).transpose(1, 2)
+        scores = torch.matmul(q, k.transpose(-2, -1)) * self.scale  # [B, nheads, tgt_j, src_j]
+        if tpose_bias is not None:
+            scores = scores + tpose_bias
+        if src_mask is not None:
+            scores = scores + src_mask
+        attn = torch.softmax(scores, dim=-1)
+        attn = self.dropout(attn)
+        out = torch.matmul(attn, v).transpose(1, 2).contiguous().view(B, tgt_j, d)
+        return self.out_proj(out)
+
+
 class GraphMotionDecoder(nn.TransformerDecoder):
     def __init__(self, decoder_layer, num_layers, norm=None, max_path_len=5, value_emb=False): 
                 # multi head attention
@@ -149,7 +219,9 @@ class GraphMotionDecoder(nn.TransformerDecoder):
         
     def forward(self, tgt: Tensor, timesteps_embs: Tensor, memory: Tensor, spatial_mask:  Optional[Tensor] = None,
                 temporal_mask: Optional[Tensor] = None, tgt_key_padding_mask: Optional[Tensor] = None,
-                memory_key_padding_mask: Optional[Tensor] = None, y=None, get_layer_activation=-1) -> Union[Tensor , Tuple[Tensor, dict]]:
+                memory_key_padding_mask: Optional[Tensor] = None, y=None, get_layer_activation=-1,
+                source_memory: Optional[Tensor] = None, tpose_bias: Optional[Tensor] = None,
+                src_cross_mask: Optional[Tensor] = None) -> Union[Tensor , Tuple[Tensor, dict]]:
         topology_rel = y['graph_dist'].long().to(tgt.device)
         edge_rel = y['joints_relations'].long().to(tgt.device)
         output = tgt
@@ -162,8 +234,9 @@ class GraphMotionDecoder(nn.TransformerDecoder):
                 edge_value_emb = self.edge_value_emb
                 topology_value_emb = self.topology_value_emb
             output = mod(
-                    output, timesteps_embs, topology_rel, edge_rel, self.edge_key_emb, self.edge_query_emb, edge_value_emb, self.topology_key_emb, self.topology_query_emb, topology_value_emb, spatial_mask, temporal_mask, 
-                    tgt_key_padding_mask, memory_key_padding_mask, y)
+                    output, timesteps_embs, topology_rel, edge_rel, self.edge_key_emb, self.edge_query_emb, edge_value_emb, self.topology_key_emb, self.topology_query_emb, topology_value_emb, spatial_mask, temporal_mask,
+                    tgt_key_padding_mask, memory_key_padding_mask, y,
+                    source_memory=source_memory, tpose_bias=tpose_bias, src_cross_mask=src_cross_mask)
             if layer_ind == get_layer_activation:
                 activations[layer_ind] = output.clone()
         if self.norm is not None:
@@ -179,7 +252,10 @@ class GraphMotionDecoderLayer(nn.TransformerDecoderLayer):
         self.d_model= d_model
         self.heads = nhead
         self.spatial_attn = GraphMultiHeadAttention(d_model = d_model, nheads = nhead, dropout=dropout)
-        self.temporal_attn = MultiheadAttention(self.d_model, nhead, dropout=dropout) 
+        self.temporal_attn = MultiheadAttention(self.d_model, nhead, dropout=dropout)
+        self.cross_motion_attn = CrossMotionAttention(d_model, nhead, dropout=dropout)
+        self.norm_cross = nn.LayerNorm(d_model)
+        self.dropout_cross = nn.Dropout(dropout)
         self.embed_timesteps = nn.Linear(d_model, d_model)
 
     # spatial attention block
@@ -212,7 +288,35 @@ class GraphMotionDecoderLayer(nn.TransformerDecoderLayer):
     def _ff_block(self, x: Tensor) -> Tensor:
         x = self.linear2(self.dropout(self.activation(self.linear1(x))))
         return self.dropout3(x)
-    
+
+    def _cross_motion_attn_block(self, x: Tensor, source_memory: Tensor,
+                                  tpose_bias: Tensor, src_cross_mask: Optional[Tensor]) -> Tensor:
+        """
+        Target motion이 source motion을 cross-attend한다.
+        x:             [frames, bs, tgt_joints, d]
+        source_memory: [frames, bs, src_joints, d]
+        tpose_bias:    [bs, nheads, tgt_joints, src_joints]
+        src_cross_mask:[bs, 1, 1, src_joints]
+        """
+        frames, bs, tgt_joints, d = x.shape
+        src_joints = source_memory.shape[2]
+
+        x_flat   = x.view(frames * bs, tgt_joints, d)
+        src_flat = source_memory.view(frames * bs, src_joints, d)
+
+        # T-pose bias: [bs, nheads, tgt_j, src_j] -> [frames*bs, nheads, tgt_j, src_j]
+        tpose_bias_exp = tpose_bias.unsqueeze(0).expand(frames, -1, -1, -1, -1).reshape(
+            frames * bs, self.heads, tgt_joints, src_joints)
+
+        # src mask: [bs, 1, 1, src_j] -> [frames*bs, 1, 1, src_j]
+        src_mask_exp = None
+        if src_cross_mask is not None:
+            src_mask_exp = src_cross_mask.unsqueeze(0).expand(frames, -1, -1, -1, -1).reshape(
+                frames * bs, 1, 1, src_joints)
+
+        out = self.cross_motion_attn(x_flat, src_flat, tpose_bias=tpose_bias_exp, src_mask=src_mask_exp)
+        return self.dropout_cross(out.view(frames, bs, tgt_joints, d))
+
     def forward(self,
         tgt: Tensor,
         timesteps_emb: Tensor,
@@ -228,7 +332,10 @@ class GraphMotionDecoderLayer(nn.TransformerDecoderLayer):
         temporal_mask: Optional[Tensor] = None,
         tgt_key_padding_mask: Optional[Tensor] = None,
         memory_key_padding_mask: Optional[Tensor] = None, #for future use
-        y = None) -> Tensor:
+        y = None,
+        source_memory: Optional[Tensor] = None,
+        tpose_bias: Optional[Tensor] = None,
+        src_cross_mask: Optional[Tensor] = None) -> Tensor:
         x = tgt #(frames, bs, njoints, feature_len)
         bs = x.shape[1]
         x = x + self.embed_timesteps(timesteps_emb).view(1, bs, 1, self.d_model)
@@ -236,5 +343,7 @@ class GraphMotionDecoderLayer(nn.TransformerDecoderLayer):
         topo_key_emb, topo_query_emb, topo_value_emb, spatial_mask, tgt_key_padding_mask, y)
         x = self.norm1(x + spatial_attn_output)
         x = self.norm2(x + self._temporal_mha_block_sin_joint(x, temporal_mask, tgt_key_padding_mask))
+        if source_memory is not None:
+            x = self.norm_cross(x + self._cross_motion_attn_block(x, source_memory, tpose_bias, src_cross_mask))
         x = self.norm3(x + self._ff_block(x))
         return x

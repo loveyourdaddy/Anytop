@@ -1,7 +1,7 @@
 import torch
 torch.cuda.empty_cache()
 import torch.nn as nn
-from model.motion_transformer import GraphMotionDecoderLayer, GraphMotionDecoder
+from model.motion_transformer import GraphMotionDecoderLayer, GraphMotionDecoder, TposeCrossAttention
 
 
 def create_sin_embedding(positions: torch.Tensor, dim: int, max_period: float = 10000,
@@ -47,6 +47,8 @@ class AnyTop(nn.Module):
         self.skip_t5=kargs.get('skip_t5', False)
         self.value_emb=kargs.get('value_emb', False)
         self.input_process = InputProcess(self.input_feats, self.root_input_feats, self.latent_dim, t5_out_dim, skip_t5=self.skip_t5)
+        self.source_input_process = InputProcess(self.input_feats, self.root_input_feats, self.latent_dim, t5_out_dim, skip_t5=self.skip_t5)
+        self.tpose_cross_attn = TposeCrossAttention(self.latent_dim, self.num_heads)
 
         print("Graph transformer init")
         seqTransDecoderLayer = GraphMotionDecoderLayer(d_model=self.latent_dim,
@@ -69,7 +71,7 @@ class AnyTop(nn.Module):
         joints_mask = y['joints_mask'].to(x.device)
         temp_mask = y['mask'].to(x.device)
         tpos_first_frame = y['tpos_first_frame'].to(x.device).unsqueeze(0)
-        
+
         bs, njoints, nfeats, nframes = x.shape
         timesteps_emb = create_sin_embedding(timesteps.view(1, -1, 1), self.latent_dim)[0]
         x = self.input_process(x, tpos_first_frame, y['joints_names_embs'], y['crop_start_ind']) # applies linear layer on each frame to convert it to latent dim
@@ -78,9 +80,36 @@ class AnyTop(nn.Module):
         temporal_mask = 1.0 - temp_mask.repeat(1, njoints, self.num_heads, 1, 1).reshape(-1, nframes + 1, nframes + 1).float()
         spatial_mask[spatial_mask == 1.0] = -1e9
         temporal_mask[temporal_mask == 1.0] = -1e9
-        
+
+        # Source motion encoding + T-pose cross-attention
+        source_memory = None
+        tpose_bias = None
+        src_cross_mask = None
+        if 'source_motion' in y and y['source_motion'] is not None:
+            src_motion = y['source_motion']                                     # [bs, src_joints, 13, nframes]
+            src_tpos   = y['source_tpos_first_frame'].to(x.device).unsqueeze(0) # [1, bs, src_joints, 13]
+            src_names  = y['source_joints_names_embs']                          # [bs, src_joints, t5_dim]
+            src_crop   = y['source_crop_start_ind']                             # [bs]
+
+            source_memory = self.source_input_process(src_motion, src_tpos, src_names, src_crop)
+            # source_memory: [1+nframes, bs, src_joints, latent_dim]
+
+            # T-pose embeddings: 각 InputProcess 출력의 첫 번째 프레임이 T-pose
+            tgt_tpose_emb = x[0]             # [bs, tgt_joints, latent_dim]
+            src_tpose_emb = source_memory[0] # [bs, src_joints, latent_dim]
+            tpose_bias = self.tpose_cross_attn(tgt_tpose_emb, src_tpose_emb)
+            # tpose_bias: [bs, nheads, tgt_joints, src_joints]
+
+            # Source cross-attention mask: padded source joints를 -1e9로 마스킹
+            src_n_joints  = y['source_n_joints'].to(x.device)  # [bs]
+            src_max_joints = src_motion.shape[1]
+            src_valid = torch.arange(src_max_joints, device=x.device).unsqueeze(0) < src_n_joints.unsqueeze(1)
+            src_cross_mask = torch.zeros(bs, 1, 1, src_max_joints, device=x.device)
+            src_cross_mask.masked_fill_(~src_valid.view(bs, 1, 1, src_max_joints), -1e9)
+
         # transformer block
-        output = self.seqTransDecoder(tgt=x, timesteps_embs=timesteps_emb, memory=None, spatial_mask=spatial_mask, temporal_mask = temporal_mask, y=y, get_layer_activation=get_layer_activation)
+        output = self.seqTransDecoder(tgt=x, timesteps_embs=timesteps_emb, memory=None, spatial_mask=spatial_mask, temporal_mask=temporal_mask, y=y, get_layer_activation=get_layer_activation,
+                                      source_memory=source_memory, tpose_bias=tpose_bias, src_cross_mask=src_cross_mask)
         if get_layer_activation > -1 and get_layer_activation < self.num_layers:
             activations = output[1]
             output=output[0]

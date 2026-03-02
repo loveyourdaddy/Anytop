@@ -2,16 +2,17 @@
 """
 Train a diffusion model for motion retargeting with reconstruction loss.
 
-python -m train.train_retarget --model_prefix retarget --overwrite --source_skeleton Alligator --target_skeletons Alligator
-python -m train.train_retarget --overwrite --source_group quadropeds --batch_size 16
---source_skeleton brownbear 
+Train
+    python -m train.train_retarget --overwrite --source_group quadropeds --batch_size 16
+    selected_source_skeleton은 get_data_retarget_dataset_loader에서 source_skeletons 인자로 전달
 
-python -m train.train_retarget \
-    --save_dir save/20260218_Retarget_dataset_truebones_bs_4_latentdim_128 \
-    --overwrite \
-    --resume_checkpoint save/20260218_Retarget_dataset_truebones_bs_4_latentdim_128/model000290000.pt \
-    --source_group quadropeds \
-    --batch_size 4
+Retrain (save bvh)
+    python -m train.train_retarget \
+        --save_dir save/20260218_Retarget_dataset_truebones_bs_4_latentdim_128 \
+        --overwrite \
+        --resume_checkpoint save/20260218_Retarget_dataset_truebones_bs_4_latentdim_128/model000290000.pt \
+        --source_group quadropeds \
+        --batch_size 4
 
 
 /home/inseo/Github/BVHView/render_bvhs.sh /home/inseo/Github/Anytop/save/20260218_Retarget_dataset_truebones_bs_4_latentdim_128/visualizations/step000290001
@@ -30,13 +31,14 @@ from utils.model_util import create_model_and_diffusion_general_skeleton
 from utils.ml_platforms import ClearmlPlatform, TensorboardPlatform, NoPlatform, WandBPlatform
 import time
 
+
 def main():
     args = train_args()
     fixseed(args.seed)
 
     # args에서 source_grouop이 설정되어야함
-    args.save_source_motions = False # True
-    args.ml_platform_type = 'TensorboardPlatform' # 'ClearmlPlatform' # 'TensorboardPlatform' # 'WandBPlatform' # 'NoPlatform'
+    args.save_source_motions = False  # True
+    args.ml_platform_type = 'TensorboardPlatform'  # 'ClearmlPlatform' # 'TensorboardPlatform' # 'WandBPlatform' # 'NoPlatform'
 
     # Setup save directory
     save_dir = args.save_dir
@@ -46,7 +48,7 @@ def main():
             # prefix = args.model_prefix
             prefix = "retarget_" + args.source_group
         model_name = f'{prefix}_dataset_truebones_bs_{args.batch_size}_latentdim_{args.latent_dim}'
-        
+
         mod_list = [m for m in os.listdir(os.path.join(os.getcwd(), 'save')) if m.startswith(model_name)]
         if len(mod_list) > 0 and not args.overwrite:
             model_name = f'{model_name}_{len(mod_list)}'
@@ -75,11 +77,11 @@ def main():
 
     dist_util.setup_dist(args.device)
     print("creating retargeting data loader...")
-    
+
     # source_group이 none이거나, source_skeleton이 none이어야함
     source_group = getattr(args, 'source_group', None)
     source_skeletons = getattr(args, 'source_skeleton', None)
-    
+
     # group
     data = get_retarget_dataset_loader(
         args,
