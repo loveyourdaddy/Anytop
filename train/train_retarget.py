@@ -6,19 +6,30 @@ Train
     python -m train.train_retarget --overwrite --source_group quadropeds --batch_size 4
     selected_source_skeleton은 get_data_retarget_dataset_loader에서 source_skeletons 인자로 전달
 
-Retrain (save bvh)
-    python -m train.train_retarget \
-        --save_dir save/20260218_Retarget_dataset_truebones_bs_4_latentdim_128 \
-        --overwrite \
-        --resume_checkpoint save/20260218_Retarget_dataset_truebones_bs_4_latentdim_128/model000290000.pt \
-        --source_group quadropeds \
-        --batch_size 4
+python -m train.train_retarget \
+    --overwrite \
+    --source_group quadropeds \
+    --source_skeleton BrownBear \
+    --batch_size 1 \
+    --lambda_geo 1.0 \
+    --use_cycle_loss \
+    --use_self_reconstruction_loss
+
+python -m train.train_retarget --source_group quadropeds --source_skeleton BrownBear
 
 
+--source_skeleton Horse
+--lambda_cycle 0.1
+--resume_checkpoint save/20260218_Retarget_dataset_truebones_bs_4_latentdim_128/model000290000.pt 
+--save_dir save/20260218_Retarget_dataset_truebones_bs_4_latentdim_128
+--overwrite \
+    
+Visualization
 /home/inseo/Github/BVHView/render_bvhs.sh /home/inseo/Github/Anytop/save/20260302_Retarget_dataset_truebones_bs_4_latentdim_128/visualizations/step000599999
 ~/Github/BVHView/render_bvhs.sh ~/Github/Anytop/dataset/truebones/zoo/truebones_processed/bvhs/BrownBear
 ~/Github/BVHView/render_bvhs.sh ~/Github/Anytop/save/20260218_Retarget_dataset_truebones_bs_4_latentdim_128/visualizations/step00029001
 """
+
 import sys
 import os
 import json
@@ -36,24 +47,29 @@ def main():
     args = train_args()
     fixseed(args.seed)
 
-    # args에서 source_grouop이 설정되어야함
-    args.save_source_motions = False  # True
-    args.ml_platform_type = 'TensorboardPlatform'  # 'ClearmlPlatform' # 'TensorboardPlatform' # 'WandBPlatform' # 'NoPlatform'
-
     # Setup save directory
     save_dir = args.save_dir
     if save_dir is None:
+        # naming convention
         prefix = "Retarget"
         if args.model_prefix is not None:
             # prefix = args.model_prefix
             prefix = "retarget_" + args.source_group
-        model_name = f'{prefix}_dataset_truebones_bs_{args.batch_size}_latentdim_{args.latent_dim}'
-
+        model_name = f'{prefix}_{args.batch_size}_latentdim_{args.latent_dim}_src'
+        # source skel
+        for animal in args.source_skeleton:
+            model_name += f'_{animal}'
+        # options
+        if args.use_cycle_loss:
+            model_name += '_cycle'
+        # 중복체크
         mod_list = [m for m in os.listdir(os.path.join(os.getcwd(), 'save')) if m.startswith(model_name)]
         if len(mod_list) > 0 and not args.overwrite:
             model_name = f'{model_name}_{len(mod_list)}'
+        # date 
         curr_time = time.strftime("%Y%m%d", time.localtime())
         model_name = curr_time + '_' + model_name
+        # path 
         save_dir = os.path.join(os.getcwd(), 'save', model_name)
         args.save_dir = save_dir
     print("Save_dir to:", save_dir)

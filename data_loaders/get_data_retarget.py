@@ -168,12 +168,13 @@ def get_retarget_dataset_loader(
     print(f"{'='*80}\n")
 
     # Use existing RetargetDataset!
-    selected_source_skeleton = ['BrownBear'] # None # 1개를 선택하기 
+    # args.source_skeleton: 지정된 경우 해당 skeleton만 source로 사용, None이면 group 전체 사용
+    selected_source_skeletons = getattr(args, 'source_skeleton', None)  # list or None
     data_dir = getattr(args, 'data_dir', './dataset/truebones/zoo/truebones_processed')
     datasets = []
     for source_skel in skeletons:
-        # source skeleton을 지정해준다면
-        if source_skel not in selected_source_skeleton:
+        # source skeleton이 지정된 경우, 해당 목록에 없으면 skip
+        if selected_source_skeletons is not None and source_skel not in selected_source_skeletons:
             continue
         
         # 지정된 group안에 있는 skeleton만 선택
@@ -182,6 +183,7 @@ def get_retarget_dataset_loader(
             continue
 
         print(f"RetargetDataset of {source_skel} -> {target_skels}:")
+        include_self = getattr(args, 'self_reconstruction', True)
         dataset = RetargetDataset(
             args=args,
             data_root=data_dir,
@@ -191,7 +193,7 @@ def get_retarget_dataset_loader(
             source_skeleton=source_skel,
             target_skeletons=target_skels,
             use_augmentation=False,
-            include_self_reconstruction=True
+            include_self_reconstruction=include_self
         )
 
         datasets.append(dataset)

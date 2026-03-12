@@ -60,6 +60,10 @@ class RetargetTrainLoop:
 
         self.save_source_motions = args.save_source_motions
 
+        # Cycle reconstruction loss settings
+        self.use_cycle_loss = getattr(args, 'use_cycle_loss', False)
+        self.lambda_cycle   = getattr(args, 'lambda_cycle', 0.1)
+
         # Load checkpoint if exists
         self._load_and_sync_parameters()
 
@@ -189,7 +193,10 @@ class RetargetTrainLoop:
                 cond['y']['source_crop_start_ind']   = source_cond['y']['crop_start_ind'].to(self.device)
 
                 # Run training step
-                self.run_step(target_motion, cond)
+                self.run_step(target_motion, cond,
+                              source_motion=source_motion,
+                              source_cond=source_cond,
+                              is_self=metadata.get('is_self', None))
 
                 # Logging
                 if self.total_step() % self.log_interval == 0:
@@ -262,15 +269,15 @@ class RetargetTrainLoop:
         print('Generation during training not implemented for retargeting')
         # TODO: Implement retargeting sample generation
 
-    def run_step(self, batch, cond, epoch=-1):
+    def run_step(self, batch, cond, source_motion=None, source_cond=None, is_self=None, epoch=-1):
         """Single training step"""
-        self.forward_backward(batch, cond, epoch)
+        self.forward_backward(batch, cond, epoch, source_motion, source_cond, is_self)
         self.mp_trainer.optimize(self.opt, self.lr_scheduler)
         self._anneal_lr()
         self.log_step()
 
-    def forward_backward(self, batch, cond, epoch):
-        """Forward and backward pass with reconstruction loss"""
+    def forward_backward(self, batch, cond, epoch, source_motion=None, source_cond=None, is_self=None):
+        """Forward and backward pass with reconstruction loss (+ optional cycle loss)"""
         self.mp_trainer.zero_grad()
 
         for i in range(0, batch.shape[0], self.microbatch):
@@ -284,8 +291,7 @@ class RetargetTrainLoop:
             # Sample timesteps
             t, weights = self.schedule_sampler.sample(micro.shape[0], dist_util.dev())
 
-            # Compute losses
-            # breakpoint()
+            # Compute main losses (A → B direction)
             compute_losses = functools.partial(
                 self.diffusion.training_losses,
                 self.ddp_model,
@@ -306,16 +312,79 @@ class RetargetTrainLoop:
                     t, losses["loss"].detach()
                 )
 
-            # Weighted loss
+            # Weighted main loss
             loss = (losses["loss"] * weights).mean()
+
+            # ── Cycle reconstruction loss (B' → A direction) ────────────────
+            # Approximation: use single-step x_0 prediction (pred_xstart) from
+            # the main pass as the "generated" B' without running full denoising.
+            # B' is detached so gradients flow only through the cycle forward pass.
+            if self.use_cycle_loss and source_motion is not None and source_cond is not None:
+                # Skip cycle for fully self-reconstruction batches (no new signal)
+                all_self = is_self is not None and all(is_self)
+                if not all_self:
+                    cycle_loss = self._compute_cycle_loss(
+                        pred_xstart_B=losses["pred_xstart"],  # [bs, tgt_joints, feats, frames]
+                        source_motion=source_motion,
+                        source_cond=source_cond,
+                        cond=micro_cond,
+                        weights=weights,
+                    )
+                    loss = loss + self.lambda_cycle * cycle_loss
+                    log_loss_dict(self.diffusion, t, {"cycle_loss": cycle_loss.unsqueeze(0).expand(t.shape) * weights})
+            # ────────────────────────────────────────────────────────────────
 
             # Log losses
             log_loss_dict(
-                self.diffusion, t, {k: v * weights for k, v in losses.items()}
+                self.diffusion, t, {k: v * weights for k, v in losses.items() if k != "pred_xstart"}
             )
 
             # Backward
             self.mp_trainer.backward(loss)
+
+    def _compute_cycle_loss(self, pred_xstart_B, source_motion, source_cond, cond, weights):
+        """
+        Cycle pass: B' → A
+        - pred_xstart_B: normalized x_0 prediction on target skeleton B (detached)
+        - source_motion:  original source motion A [bs, src_joints, feats, frames]
+        - source_cond:    source conditioning dict {'y': {...}}
+        - cond:           main conditioning dict (has target skeleton info in 'y')
+        """
+        bs = source_motion.shape[0]
+
+        # Build cycle conditioning
+        # Target skeleton = A (source skeleton)
+        # Source for cross-attention = B' (pred_xstart_B)
+        cycle_cond = {'y': {}}
+        src_y = source_cond['y']
+        tgt_y = cond['y']
+
+        # Target skeleton A fields (needed by training_losses and model)
+        for key in ['tpos_first_frame', 'joints_names_embs', 'n_joints', 'parents',
+                    'joints_mask', 'mask', 'lengths_mask', 'lengths',
+                    'mean', 'std', 'crop_start_ind']:
+            if key in src_y:
+                val = src_y[key]
+                cycle_cond['y'][key] = val.to(self.device) if torch.is_tensor(val) else val
+
+        # Source (cross-attention) = B' (target skeleton B's prediction)
+        cycle_cond['y']['source_motion']            = pred_xstart_B.detach()
+        cycle_cond['y']['source_tpos_first_frame']  = tgt_y['tpos_first_frame'].to(self.device)
+        cycle_cond['y']['source_joints_names_embs'] = tgt_y['joints_names_embs'].to(self.device)
+        cycle_cond['y']['source_n_joints']          = tgt_y['n_joints'].to(self.device)
+        cycle_cond['y']['source_crop_start_ind']    = tgt_y['crop_start_ind'].to(self.device)
+
+        # Sample (possibly different) timesteps for cycle pass
+        t_cycle, _ = self.schedule_sampler.sample(bs, dist_util.dev())
+
+        cycle_losses = self.diffusion.training_losses(
+            self.ddp_model,
+            source_motion.to(self.device),  # GT = original source motion A
+            t_cycle,
+            model_kwargs=cycle_cond,
+        )
+
+        return (cycle_losses["loss"] * weights).mean()
 
     def _anneal_lr(self):
         """Anneal learning rate"""

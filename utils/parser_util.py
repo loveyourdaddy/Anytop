@@ -113,12 +113,14 @@ def add_training_options(parser):
                        help="Unique string at the beggining of the model name.")
     group.add_argument("--source_group", type=str,
                        help="Unique string at the beggining of the model name.")
-    group.add_argument("--source_skeleton", type=str,
-                       help="Unique string at the beggining of the model name.")
+    group.add_argument("--source_skeleton", type=str, nargs='+', default=None,
+                       help="Source skeleton name(s) to train retargeting from. "
+                            "Accepts one or more (e.g. --source_skeleton BrownBear Horse). "
+                            "If omitted, all skeletons in source_group are used as sources.")
     
     group.add_argument("--overwrite", action='store_true',
                        help="If True, will enable to use an already existing save_dir.")
-    group.add_argument("--ml_platform_type", default='NoPlatform', choices=['NoPlatform', 'ClearmlPlatform', 'TensorboardPlatform', 'WandBPlatform'], type=str,
+    group.add_argument("--ml_platform_type", default='TensorboardPlatform', choices=['NoPlatform', 'ClearmlPlatform', 'TensorboardPlatform', 'WandBPlatform'], type=str,
                        help="Choose platform to log results. NoPlatform means no logging.")
     group.add_argument("--lr", default=1e-4, type=float, help="Learning rate.")
 
@@ -155,6 +157,14 @@ def add_training_options(parser):
                        help="If True, will use EMA model averaging.")
     group.add_argument("--balanced", action='store_true',
                        help="Use balancing sampler for fairness between topologies")
+    group.add_argument("--save_source_motions", action='store_true',
+                       help="If True, save source motions as BVH at the start of training.")
+    group.add_argument("--use_cycle_loss", action='store_true',
+                       help="If True, enable cyclic reconstruction loss (B'→A direction).")
+    group.add_argument("--lambda_cycle", default=0.1, type=float,
+                       help="Weight for the cyclic reconstruction loss term.")
+    group.add_argument("--self_reconstruction", dest='self_reconstruction', default=True, action='store_true',
+                       help="Enable self-reconstruction pairs (source==target). Default: True.")
 
 def add_sampling_options(parser):
     group = parser.add_argument_group('sampling')
@@ -188,7 +198,6 @@ def add_generate_options(parser):
                     help='Retargeting strategy')
 
 def add_dift_options(parser):
-    # bvhs_dir, sample_bvh, face_joints, save_dir=None, tpos_bvh=None
     group = parser.add_argument_group('dift')
     # group.add_argument("--apply_pca", action='store_true',
     #                    help="apply pca on feats before calculating similarity.")

@@ -1513,9 +1513,9 @@ class GaussianDiffusion:
         if noise is None:
             noise = th.randn_like(x_start)
         x_t = self.q_sample(x_start, t, noise=noise)
+        # print(f"timestep {t}")
 
         terms = {}
-
         if self.loss_type == LossType.KL or self.loss_type == LossType.RESCALED_KL:
             terms["loss"] = self._vb_terms_bpd(
                 model=model,
@@ -1560,17 +1560,19 @@ class GaussianDiffusion:
                 ModelMeanType.EPSILON: noise,
             }[self.model_mean_type]
             assert model_output.shape == target.shape == x_start.shape  # [bs, njoints, nfeats, nframes]
-            
-            # print(f"timestep {t}")
-            # 1. simple loss 
+
+            # 1. simple loss
             # get ric positions befor denorm to care equally for all topologies
             terms["l_simple"] = self.temporal_spatial_masked_l2(target, model_output, mask, joints_mask, lengths, actual_joints)
             terms["loss"] = torch.zeros_like(terms["l_simple"])
             terms["loss"] = terms["loss"] + terms["l_simple"]
-        
-            # denormalize before applying loss terms 
-            target = (target * std) + mean 
-            model_output = (model_output * std) + mean 
+
+            # expose normalized x_0 prediction for downstream use (e.g. cycle loss)
+            terms["pred_xstart"] = model_output.detach().clone()
+
+            # denormalize before applying loss terms
+            target = (target * std) + mean
+            model_output = (model_output * std) + mean
             
             # # calc all loss terms 
             if self.lambda_geo > 0.:    
