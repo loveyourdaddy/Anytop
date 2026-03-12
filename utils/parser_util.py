@@ -5,6 +5,7 @@ import json
 import copy
 import sys
 
+
 def parse_and_load_from_model(parser):
     # args according to the loaded model
     # do not try to specify them from cmd line since they will be overwritten
@@ -16,12 +17,13 @@ def parse_and_load_from_model(parser):
 
     if isinstance(args.model_path, list) and len(args.model_path) == 1:
         args.model_path = args.model_path[0]
-    
+
     # load args from model
     assert not isinstance(args, list) and not isinstance(args.model_path, list), 'Deprecated feature..'
     args = extract_args(copy.deepcopy(args), args_to_overwrite, args.model_path)
 
     return args
+
 
 def extract_args(args, args_to_overwrite, model_path):
     args_path = os.path.join(os.path.dirname(model_path), 'args.json')
@@ -37,9 +39,10 @@ def extract_args(args, args_to_overwrite, model_path):
     if isinstance(args.emb_trans_dec, bool):
         if args.emb_trans_dec:
             args.emb_trans_dec = 'cls_tcond_cross_tcond'
-        else: 
+        else:
             args.emb_trans_dec = 'cls_none_cross_tcond'
     return args
+
 
 def get_args_per_group_name(parser, args, group_name):
     for group in parser._action_groups:
@@ -47,6 +50,7 @@ def get_args_per_group_name(parser, args, group_name):
             group_dict = {a.dest: getattr(args, a.dest, None) for a in group._group_actions}
             return list(argparse.Namespace(**group_dict).__dict__.keys())
     return ValueError('group_name was not found.')
+
 
 def get_model_path_from_args():
     try:
@@ -56,6 +60,7 @@ def get_model_path_from_args():
         return dummy_args.model_path
     except:
         raise ValueError('model_path argument must be specified.')
+
 
 def add_base_options(parser):
     group = parser.add_argument_group('base')
@@ -69,6 +74,7 @@ def add_base_options(parser):
     group.add_argument("--diffusion_steps", default=100, type=int,
                        help="Number of diffusion steps (denoted T in the paper)")
     group.add_argument("--sigma_small", default=True, type=bool, help="Use smaller sigma values.")
+
 
 def add_model_options(parser):
     group = parser.add_argument_group('model')
@@ -86,10 +92,10 @@ def add_model_options(parser):
                        help="The probability of masking the condition during training."
                             " For classifier-free guidance learning.")
     group.add_argument("--lambda_fs", default=0.0, type=float, help="Foot contact loss.")
-    group.add_argument("--lambda_geo", default=1.0, type=float, help="Foot contact loss.") # TODO: Tuning
+    group.add_argument("--lambda_geo", default=1.0, type=float, help="Foot contact loss.")  # TODO: Tuning
     group.add_argument("--t5_name", default='t5-base', choices=["t5-small", "t5-base", "t5-large", "t5-3b", "t5-11b",
-              "google/flan-t5-small", "google/flan-t5-base", "google/flan-t5-large",
-              "google/flan-t5-xl", "google/flan-t5-xxl"], type=str,
+                                                                "google/flan-t5-small", "google/flan-t5-base", "google/flan-t5-large",
+                                                                "google/flan-t5-xl", "google/flan-t5-xxl"], type=str,
                        help="Choose t5 pretrained model")
     group.add_argument("--temporal_window", default=31, type=int,
                        help="temporal window size")
@@ -98,12 +104,14 @@ def add_model_options(parser):
     group.add_argument("--value_emb", action='store_true',
                        help="If passed, graph multihead attention learns GRPE value embeddings")
 
+
 def add_data_options(parser):
     group = parser.add_argument_group('dataset')
     group.add_argument("--data_dir", default="", type=str,
                        help="If empty, will use defaults according to the specified dataset.")
-    group.add_argument("--objects_subset", default='all', choices=['all', 'quadropeds' , 'flying', 'bipeds', 'millipeds', 'millipeds_snakes', 'quadropeds_clean', 'millipeds_clean', 'flying_clean', 'bipeds_clean', 'all_clean'], type=str,
+    group.add_argument("--objects_subset", default='all', choices=['all', 'quadropeds', 'flying', 'bipeds', 'millipeds', 'millipeds_snakes', 'quadropeds_clean', 'millipeds_clean', 'flying_clean', 'bipeds_clean', 'all_clean'], type=str,
                        help="Object subset.")
+
 
 def add_training_options(parser):
     group = parser.add_argument_group('training')
@@ -117,7 +125,7 @@ def add_training_options(parser):
                        help="Source skeleton name(s) to train retargeting from. "
                             "Accepts one or more (e.g. --source_skeleton BrownBear Horse). "
                             "If omitted, all skeletons in source_group are used as sources.")
-    
+
     group.add_argument("--overwrite", action='store_true',
                        help="If True, will enable to use an already existing save_dir.")
     group.add_argument("--ml_platform_type", default='TensorboardPlatform', choices=['NoPlatform', 'ClearmlPlatform', 'TensorboardPlatform', 'WandBPlatform'], type=str,
@@ -139,7 +147,7 @@ def add_training_options(parser):
                        help="If -1, will use all samples in the specified split.")
     group.add_argument("--log_interval", default=50, type=int,
                        help="Log losses each N steps")
-    group.add_argument("--save_interval", default=100_000, type=int, # 50k -> 100k, util 600k
+    group.add_argument("--save_interval", default=100_000, type=int,  # 50k -> 100k, util 600k
                        help="Save checkpoints and run evaluation each N steps")
     group.add_argument("--num_steps", default=600_000, type=int,
                        help="Training will stop after the specified number of steps.")
@@ -159,12 +167,15 @@ def add_training_options(parser):
                        help="Use balancing sampler for fairness between topologies")
     group.add_argument("--save_source_motions", action='store_true',
                        help="If True, save source motions as BVH at the start of training.")
-    group.add_argument("--use_cycle_loss", action='store_true',
+    group.add_argument("--use_cycle_loss", default=False, action='store_true',
                        help="If True, enable cyclic reconstruction loss (B'→A direction).")
     group.add_argument("--lambda_cycle", default=0.1, type=float,
                        help="Weight for the cyclic reconstruction loss term.")
-    group.add_argument("--self_reconstruction", dest='self_reconstruction', default=True, action='store_true',
+    group.add_argument("--use_self_reconstruction", dest='use_self_reconstruction', default=False, action='store_true',
                        help="Enable self-reconstruction pairs (source==target). Default: True.")
+    group.add_argument("--use_cross_reconstruction", dest='use_cross_reconstruction', default=False, action='store_true',
+                       help="Enable cross-skeleton name-matched pairs (A→B by action name). Default: True.")
+
 
 def add_sampling_options(parser):
     group = parser.add_argument_group('sampling')
@@ -180,7 +191,7 @@ def add_sampling_options(parser):
                        help="Number of repetitions, per sample (text prompt/action)")
     group.add_argument("--cond_path", default='', type=str,
                        help="provide cond.py path in case you wish to generate motion for skeleton not included in Truebones dataset.")
-    
+
 
 def add_generate_options(parser):
     group = parser.add_argument_group('generate')
@@ -189,13 +200,14 @@ def add_generate_options(parser):
                             "Maximum is 9.8 for HumanML3D (text-to-motion), and 2.0 for HumanAct12 (action-to-motion)")
     group.add_argument("--object_type", default=['Flamingo'], type=str, nargs='+',
                        help="An object type to be generated. If empty, will generate flamingo :).")
-    
+
     # Retargeting options
     parser.add_argument('--source_motion', type=str, help='Path to source motion file')
     parser.add_argument('--source_type', type=str, help='Source skeleton type')
-    parser.add_argument('--retarget_mode', type=str, default='guided', 
-                    choices=['guided', 'inpaint', 'full'],
-                    help='Retargeting strategy')
+    parser.add_argument('--retarget_mode', type=str, default='guided',
+                        choices=['guided', 'inpaint', 'full'],
+                        help='Retargeting strategy')
+
 
 def add_dift_options(parser):
     group = parser.add_argument_group('dift')
@@ -230,9 +242,9 @@ def add_edit_options(parser):
     group.add_argument("--suffix_start", default=0.75, type=float,
                        help="For in_between editing - Defines the start of input suffix (ratio from all frames).")
     group.add_argument("--samples", default=['assets/Ostrich___Attack_581.npy'], type=str, nargs='+',
-                    help="samples npy")
+                       help="samples npy")
     group.add_argument("--object_type", default='Flamingo', type=str,
-                    help="An object type to be generated. If empty, will generate flamingo :).")
+                       help="An object type to be generated. If empty, will generate flamingo :).")
     group.add_argument("--upper_body_root", default=[0], type=int, nargs='+',
                        help="defines the root joints of the upper body for upper_body editing mode.")
     group.add_argument("--unique_str", default='', type=str, help="A string to be added to the file name to identify a specific change. Should start with '_'.")
@@ -245,17 +257,18 @@ def add_render_options(parser):
     group.add_argument('--scale', type=float, default=0.7, help='')
     group.add_argument('--cylinder_radius', type=float, default=0.42, help='')
     group.add_argument('--sphere_radius', type=float, default=0.56, help='')
-    group.add_argument("--subset", default='bipeds', choices=['quadropeds' , 'flying', 'bipeds', 'millipeds_snakes'], type=str, help="Object subset.")
+    group.add_argument("--subset", default='bipeds', choices=['quadropeds', 'flying', 'bipeds', 'millipeds_snakes'], type=str, help="Object subset.")
 
 
 def add_evaluation_options(parser):
     group = parser.add_argument_group('eval')
-    group.add_argument("--eval_mode", default='npy_loc',type=str, choices=['npy_rot', 'npy_loc'], help="Path to gt dir.")
-    group.add_argument("--benchmark_path", default='eval/benchmarks/benchmark_all.txt', type=str,  help="Path to benchmark character names. If empty, will use all excluding the characters_to_exclude")
+    group.add_argument("--eval_mode", default='npy_loc', type=str, choices=['npy_rot', 'npy_loc'], help="Path to gt dir.")
+    group.add_argument("--benchmark_path", default='eval/benchmarks/benchmark_all.txt', type=str, help="Path to benchmark character names. If empty, will use all excluding the characters_to_exclude")
     group.add_argument("--eval_gt_dir", default='dataset/truebones/zoo/truebones_processed/motions', type=str, help="Path to gt dir.")
     group.add_argument("--eval_gen_dir", required=True, type=str, help="Path to gen dir.")
     group.add_argument("--characters_to_exclude", default='MouseyNoFingers,Mousey_m,Trex,SabreToothTiger,Raptor2', type=str, help="Comma separated list of characters to exclude. The default is character with more than 40 motions.")
     group.add_argument("--unique_str", default='', type=str, help="A string to be added to the file name to identify a specific change. Should start with '_'.")
+
 
 def train_args():
     parser = ArgumentParser()
@@ -264,6 +277,7 @@ def train_args():
     add_model_options(parser)
     add_training_options(parser)
     return parser.parse_args()
+
 
 def generate_args():
     parser = ArgumentParser()
@@ -274,6 +288,7 @@ def generate_args():
     add_generate_options(parser)
     args = parse_and_load_from_model(parser)
     return args
+
 
 def process_new_skeleton_args():
     parser = ArgumentParser()
@@ -293,6 +308,7 @@ def process_new_skeleton_args():
                             If missing, the code selects a pose from the provided BVH files.")
     args = parser.parse_args()
     return args
+
 
 def dift_args():
     parser = ArgumentParser()
@@ -321,6 +337,7 @@ def evaluation_parser():
     add_evaluation_options(parser)
     return parser.parse_args()
 
+
 def render_parser():
     parser = ArgumentParser()
     add_render_options(parser)
@@ -329,4 +346,3 @@ def render_parser():
     else:
         argv = sys.argv[sys.argv.index("--") + 1:]
     return parser.parse_args(argv)
-

@@ -12,17 +12,14 @@ python -m train.train_retarget \
     --source_skeleton BrownBear \
     --batch_size 1 \
     --lambda_geo 1.0 \
-    --use_cycle_loss \
-    --use_self_reconstruction_loss
-
-python -m train.train_retarget --source_group quadropeds --source_skeleton BrownBear
-
-
+    --use_self_reconstruction\
+    --use_cross_reconstruction\
+    --use_cycle_loss
+    
 --source_skeleton Horse
 --lambda_cycle 0.1
 --resume_checkpoint save/20260218_Retarget_dataset_truebones_bs_4_latentdim_128/model000290000.pt 
 --save_dir save/20260218_Retarget_dataset_truebones_bs_4_latentdim_128
---overwrite \
     
 Visualization
 /home/inseo/Github/BVHView/render_bvhs.sh /home/inseo/Github/Anytop/save/20260302_Retarget_dataset_truebones_bs_4_latentdim_128/visualizations/step000599999
@@ -60,16 +57,21 @@ def main():
         for animal in args.source_skeleton:
             model_name += f'_{animal}'
         # options
+        if args.use_self_reconstruction:
+            model_name += '_selfRecon'
+        if args.use_cross_reconstruction:
+            model_name += '_crossRecon'
         if args.use_cycle_loss:
             model_name += '_cycle'
+            
         # 중복체크
         mod_list = [m for m in os.listdir(os.path.join(os.getcwd(), 'save')) if m.startswith(model_name)]
         if len(mod_list) > 0 and not args.overwrite:
             model_name = f'{model_name}_{len(mod_list)}'
-        # date 
+        # date
         curr_time = time.strftime("%Y%m%d", time.localtime())
         model_name = curr_time + '_' + model_name
-        # path 
+        # path
         save_dir = os.path.join(os.getcwd(), 'save', model_name)
         args.save_dir = save_dir
     print("Save_dir to:", save_dir)

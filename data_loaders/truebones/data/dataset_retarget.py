@@ -30,7 +30,8 @@ class RetargetDataset(Dataset):
         source_skeleton=None,
         target_skeletons=None,
         use_augmentation=False,
-        include_self_reconstruction=True
+        include_self_reconstruction=True,
+        include_cross_reconstruction=True
     ):
         """
         Args:
@@ -51,6 +52,7 @@ class RetargetDataset(Dataset):
         self.target_skeletons = target_skeletons if target_skeletons else []
         self.use_augmentation = use_augmentation
         self.include_self_reconstruction = include_self_reconstruction
+        self.include_cross_reconstruction = include_cross_reconstruction
 
         # Load condition dictionary
         from data_loaders.truebones.truebones_utils.get_opt import get_opt
@@ -168,21 +170,22 @@ class RetargetDataset(Dataset):
                     })
                     self_count += 1
 
-                for target_type, target_path in skeleton_motions:
-                    # target skeleton에 없다면 제외, source_type==target_type일 수 있음
-                    if self.target_skeletons and target_type not in self.target_skeletons:
-                        continue
+                if self.include_cross_reconstruction:
+                    for target_type, target_path in skeleton_motions:
+                        # target skeleton에 없다면 제외, source_type==target_type일 수 있음
+                        if self.target_skeletons and target_type not in self.target_skeletons:
+                            continue
 
-                    # 위 조건이 만족되었다면 motion_pairs로 등록
-                    self.motion_pairs.append({
-                        'source_path': source_path,
-                        'source_type': source_type,
-                        'target_path': target_path,
-                        'target_type': target_type,
-                        'action_name': action_name,
-                        'is_self': False
-                    })
-                    cross_count += 1
+                        # 위 조건이 만족되었다면 motion_pairs로 등록
+                        self.motion_pairs.append({
+                            'source_path': source_path,
+                            'source_type': source_type,
+                            'target_path': target_path,
+                            'target_type': target_type,
+                            'action_name': action_name,
+                            'is_self': False
+                        })
+                        cross_count += 1
 
         print(f"    Built {len(self.motion_pairs)} motion pairs "
               f"(cross: {cross_count}, self-reconstruction: {self_count})")

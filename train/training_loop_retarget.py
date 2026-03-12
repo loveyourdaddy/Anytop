@@ -315,32 +315,34 @@ class RetargetTrainLoop:
             # Weighted main loss
             loss = (losses["loss"] * weights).mean()
 
-            # ── Cycle reconstruction loss (B' → A direction) ────────────────
-            # Approximation: use single-step x_0 prediction (pred_xstart) from
-            # the main pass as the "generated" B' without running full denoising.
-            # B' is detached so gradients flow only through the cycle forward pass.
-            if self.use_cycle_loss and source_motion is not None and source_cond is not None:
-                # Skip cycle for fully self-reconstruction batches (no new signal)
-                all_self = is_self is not None and all(is_self)
-                if not all_self:
-                    cycle_loss = self._compute_cycle_loss(
-                        pred_xstart_B=losses["pred_xstart"],  # [bs, tgt_joints, feats, frames]
-                        source_motion=source_motion,
-                        source_cond=source_cond,
-                        cond=micro_cond,
-                        weights=weights,
-                    )
-                    loss = loss + self.lambda_cycle * cycle_loss
-                    log_loss_dict(self.diffusion, t, {"cycle_loss": cycle_loss.unsqueeze(0).expand(t.shape) * weights})
-            # ────────────────────────────────────────────────────────────────
-
             # Log losses
             log_loss_dict(
                 self.diffusion, t, {k: v * weights for k, v in losses.items() if k != "pred_xstart"}
             )
 
-            # Backward
+            # Backward main loss first — frees main graph before cycle forward
             self.mp_trainer.backward(loss)
+
+            # ── Cycle reconstruction loss (B' → A direction) ────────────────
+            # Approximation: use single-step x_0 prediction (pred_xstart) from
+            # the main pass as the "generated" B' without running full denoising.
+            # B' is detached so gradients flow only through the cycle forward pass.
+            # Separate backward avoids holding both computation graphs in VRAM.
+            if self.use_cycle_loss and source_motion is not None and source_cond is not None:
+                # Skip cycle for fully self-reconstruction batches (no new signal)
+                all_self = is_self is not None and all(is_self)
+                if not all_self:
+                    pred_xstart_B = losses["pred_xstart"].detach()
+                    cycle_loss = self._compute_cycle_loss(
+                        pred_xstart_B=pred_xstart_B,
+                        source_motion=source_motion,
+                        source_cond=source_cond,
+                        cond=micro_cond,
+                        weights=weights,
+                    )
+                    log_loss_dict(self.diffusion, t, {"cycle_loss": cycle_loss.unsqueeze(0).expand(t.shape) * weights})
+                    self.mp_trainer.backward(self.lambda_cycle * cycle_loss)
+            # ────────────────────────────────────────────────────────────────
 
     def _compute_cycle_loss(self, pred_xstart_B, source_motion, source_cond, cond, weights):
         """
@@ -362,13 +364,13 @@ class RetargetTrainLoop:
         # Target skeleton A fields (needed by training_losses and model)
         for key in ['tpos_first_frame', 'joints_names_embs', 'n_joints', 'parents',
                     'joints_mask', 'mask', 'lengths_mask', 'lengths',
-                    'mean', 'std', 'crop_start_ind']:
+                    'mean', 'std', 'crop_start_ind', 'graph_dist', 'joints_relations']:
             if key in src_y:
                 val = src_y[key]
                 cycle_cond['y'][key] = val.to(self.device) if torch.is_tensor(val) else val
 
         # Source (cross-attention) = B' (target skeleton B's prediction)
-        cycle_cond['y']['source_motion']            = pred_xstart_B.detach()
+        cycle_cond['y']['source_motion']            = pred_xstart_B
         cycle_cond['y']['source_tpos_first_frame']  = tgt_y['tpos_first_frame'].to(self.device)
         cycle_cond['y']['source_joints_names_embs'] = tgt_y['joints_names_embs'].to(self.device)
         cycle_cond['y']['source_n_joints']          = tgt_y['n_joints'].to(self.device)

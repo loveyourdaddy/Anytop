@@ -176,14 +176,15 @@ def get_retarget_dataset_loader(
         # source skeleton이 지정된 경우, 해당 목록에 없으면 skip
         if selected_source_skeletons is not None and source_skel not in selected_source_skeletons:
             continue
-        
+
         # 지정된 group안에 있는 skeleton만 선택
         target_skels = [s for s in skeletons if s != source_skel]
         if not target_skels:
             continue
 
         print(f"RetargetDataset of {source_skel} -> {target_skels}:")
-        include_self = getattr(args, 'self_reconstruction', True)
+        use_self_reconstruction = getattr(args, 'use_self_reconstruction', True)
+        use_cross_reconstruction = getattr(args, 'use_cross_reconstruction', True)
         dataset = RetargetDataset(
             args=args,
             data_root=data_dir,
@@ -193,7 +194,8 @@ def get_retarget_dataset_loader(
             source_skeleton=source_skel,
             target_skeletons=target_skels,
             use_augmentation=False,
-            include_self_reconstruction=include_self
+            include_self_reconstruction=use_self_reconstruction,
+            include_cross_reconstruction=use_cross_reconstruction
         )
 
         datasets.append(dataset)
