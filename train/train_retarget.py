@@ -3,7 +3,7 @@
 Train a diffusion model for motion retargeting with reconstruction loss.
 
 Train
-    python -m train.train_retarget --overwrite --source_group quadropeds --batch_size 16
+    python -m train.train_retarget --overwrite --source_group quadropeds --batch_size 4
     selected_source_skeleton은 get_data_retarget_dataset_loader에서 source_skeletons 인자로 전달
 
 Retrain (save bvh)
@@ -15,7 +15,7 @@ Retrain (save bvh)
         --batch_size 4
 
 
-/home/inseo/Github/BVHView/render_bvhs.sh /home/inseo/Github/Anytop/save/20260218_Retarget_dataset_truebones_bs_4_latentdim_128/visualizations/step000290001
+/home/inseo/Github/BVHView/render_bvhs.sh /home/inseo/Github/Anytop/save/20260302_Retarget_dataset_truebones_bs_4_latentdim_128/visualizations/step000599999
 ~/Github/BVHView/render_bvhs.sh ~/Github/Anytop/dataset/truebones/zoo/truebones_processed/bvhs/BrownBear
 ~/Github/BVHView/render_bvhs.sh ~/Github/Anytop/save/20260218_Retarget_dataset_truebones_bs_4_latentdim_128/visualizations/step00029001
 """

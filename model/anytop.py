@@ -46,7 +46,10 @@ class AnyTop(nn.Module):
         self.cond_mask_prob = kargs.get('cond_mask_prob', 0.)
         self.skip_t5=kargs.get('skip_t5', False)
         self.value_emb=kargs.get('value_emb', False)
+        
+        # target noisy motion => latent representation 
         self.input_process = InputProcess(self.input_feats, self.root_input_feats, self.latent_dim, t5_out_dim, skip_t5=self.skip_t5)
+        # source motion => latent representation (for cross attention)
         self.source_input_process = InputProcess(self.input_feats, self.root_input_feats, self.latent_dim, t5_out_dim, skip_t5=self.skip_t5)
         self.tpose_cross_attn = TposeCrossAttention(self.latent_dim, self.num_heads)
 
@@ -60,6 +63,7 @@ class AnyTop(nn.Module):
                                                         num_layers=self.num_layers, value_emb=self.value_emb)
             
         
+        # latent (128) -> input feature (13)
         self.output_process = OutputProcess(self.feature_len, self.root_input_feats, self.max_joints, self.latent_dim)
 
     def forward(self, x, timesteps, get_layer_activation=-1, y=None):
