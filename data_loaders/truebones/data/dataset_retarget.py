@@ -29,7 +29,8 @@ class RetargetDataset(Dataset):
         t5_name='t5-base',
         source_skeleton=None,
         target_skeletons=None,
-        use_augmentation=False
+        use_augmentation=False,
+        include_self_reconstruction=True
     ):
         """
         Args:
@@ -39,7 +40,9 @@ class RetargetDataset(Dataset):
             t5_name: T5 model name
             source_skeleton: Source skeleton type
             target_skeletons: List of target skeleton types
-            use_augmentation: Whether to use joint augmentation
+            use_augmentation: Whether to use joint augmentation (add, remove joints)
+            include_self_reconstruction: If True, add self-pairs (source==target)
+                as identity mapping supervision
         """
         self.data_root = data_root
         self.num_frames = num_frames
@@ -47,6 +50,7 @@ class RetargetDataset(Dataset):
         self.source_skeleton = source_skeleton
         self.target_skeletons = target_skeletons if target_skeletons else []
         self.use_augmentation = use_augmentation
+        self.include_self_reconstruction = include_self_reconstruction
 
         # Load condition dictionary
         from data_loaders.truebones.truebones_utils.get_opt import get_opt
@@ -144,11 +148,26 @@ class RetargetDataset(Dataset):
             return
 
         # Create pairs from same actions across different skeletons
+        cross_count = 0
+        self_count = 0
         for action_name, skeleton_motions in motion_dict.items(): # 'action', [('source_skeleton', 'motion'), ...]
             for i, (source_type, source_path) in enumerate(skeleton_motions):
-                # motiont의 source type이 지정된 source skeleton이 아니라면 제외 
+                # motiont의 source type이 지정된 source skeleton이 아니라면 제외
                 if self.source_skeleton and source_type != self.source_skeleton:
                     continue
+
+                # Self-reconstruction pair: source == target (same file, same skeleton)
+                if self.include_self_reconstruction:
+                    self.motion_pairs.append({
+                        'source_path': source_path,
+                        'source_type': source_type,
+                        'target_path': source_path,
+                        'target_type': source_type,
+                        'action_name': action_name,
+                        'is_self': True
+                    })
+                    self_count += 1
+
                 for target_type, target_path in skeleton_motions:
                     # target skeleton에 없다면 제외, source_type==target_type일 수 있음
                     if self.target_skeletons and target_type not in self.target_skeletons:
@@ -160,9 +179,13 @@ class RetargetDataset(Dataset):
                         'source_type': source_type,
                         'target_path': target_path,
                         'target_type': target_type,
-                        'action_name': action_name
+                        'action_name': action_name,
+                        'is_self': False
                     })
-        print(f"    Built {len(self.motion_pairs)} motion pairs")
+                    cross_count += 1
+
+        print(f"    Built {len(self.motion_pairs)} motion pairs "
+              f"(cross: {cross_count}, self-reconstruction: {self_count})")
 
     def _load_motion(self, motion_path, skeleton_type):
         """Load and preprocess motion data"""
@@ -285,8 +308,12 @@ class RetargetDataset(Dataset):
         pair = self.motion_pairs[idx]
 
         # Load source and target motions
+        # Self-reconstruction: load once so both share the exact same crop
         source_motion = self._load_motion(pair['source_path'], pair['source_type'])
-        target_motion = self._load_motion(pair['target_path'], pair['target_type'])
+        if pair.get('is_self', False):
+            target_motion = source_motion
+        else:
+            target_motion = self._load_motion(pair['target_path'], pair['target_type'])
 
         # Apply augmentation
         if self.use_augmentation:
@@ -302,7 +329,8 @@ class RetargetDataset(Dataset):
             'target': target_batch,
             'source_type': pair['source_type'],
             'target_type': pair['target_type'],
-            'action_name': pair['action_name']
+            'action_name': pair['action_name'],
+            'is_self': pair.get('is_self', False)
         }
 
 
@@ -335,7 +363,8 @@ def collate_retarget_batch(batch):
     metadata = {
         'source_types': [item['source_type'] for item in batch],
         'target_types': [item['target_type'] for item in batch],
-        'action_names': [item['action_name'] for item in batch]
+        'action_names': [item['action_name'] for item in batch],
+        'is_self': [item.get('is_self', False) for item in batch]
     }
 
     # Return 5 elements for compatibility (some are None/unused)

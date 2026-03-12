@@ -190,7 +190,8 @@ def get_retarget_dataset_loader(
             t5_name=t5_name,
             source_skeleton=source_skel,
             target_skeletons=target_skels,
-            use_augmentation=False
+            use_augmentation=False,
+            include_self_reconstruction=True
         )
 
         datasets.append(dataset)
