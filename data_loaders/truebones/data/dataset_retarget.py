@@ -176,7 +176,7 @@ class RetargetDataset(Dataset):
                         if self.target_skeletons and target_type not in self.target_skeletons:
                             continue
 
-                        # 위 조건이 만족되었다면 motion_pairs로 등록
+                        # motion_pairs 등록
                         self.motion_pairs.append({
                             'source_path': source_path,
                             'source_type': source_type,

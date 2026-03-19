@@ -1,0 +1,2 @@
+/home/inseo/Github/BVHView/render_bvhs.sh /home/inseo/Github/Anytop/save/20260312_Retarget_1_latentdim_128_src_BrownBear_selfRecon_crossRecon/visualizations/step000599999
+/home/inseo/Github/BVHView/render_bvhs.sh /home/inseo/Github/Anytop/save/20260312_Retarget_1_latentdim_128_src_BrownBear_selfRecon_crossRecon_cycle/visualizations/step000500000

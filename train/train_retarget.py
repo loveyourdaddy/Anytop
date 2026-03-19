@@ -1,30 +1,43 @@
 # This code is based on https://github.com/openai/guided-diffusion
 """
-Train a diffusion model for motion retargeting with reconstruction loss.
+use_self_reconstruction: source motion에 대해 reconstruction loss
+use_cross_reconstruction: source motion과 target motion의 이름이 동일할 때, target motion에 대해 reconstruction loss
+use_cycle_loss: source motion -> target motion -> source motion으로 cycle loss
 
-Train
-    python -m train.train_retarget --overwrite --source_group quadropeds --batch_size 4
-    selected_source_skeleton은 get_data_retarget_dataset_loader에서 source_skeletons 인자로 전달
 
-python -m train.train_retarget \
-    --overwrite \
-    --source_group quadropeds \
-    --source_skeleton BrownBear \
-    --batch_size 1 \
-    --lambda_geo 1.0 \
-    --use_self_reconstruction\
-    --use_cross_reconstruction\
-    --use_cycle_loss
+Usage:
+    python -m train.train_retarget \
+        --overwrite \
+        --source_group quadropeds \
+        --source_skeleton BrownBear \
+        --batch_size 1 \
+        --lambda_geo 1.0 \
+        --use_self_reconstruction\
+        --use_cycle_loss
+        
+        --use_cross_reconstruction\
+
+모든 quadropeds을 source로:
+    python -m train.train_retarget \
+        --overwrite \
+        --source_group quadropeds \
+        --batch_size 1 \
+        --lambda_geo 1.0 \
+        --use_self_reconstruction\
+        --use_cycle_loss
     
+        --use_cross_reconstruction\
+            
 --source_skeleton Horse
 --lambda_cycle 0.1
 --resume_checkpoint save/20260218_Retarget_dataset_truebones_bs_4_latentdim_128/model000290000.pt 
 --save_dir save/20260218_Retarget_dataset_truebones_bs_4_latentdim_128
     
 Visualization
-/home/inseo/Github/BVHView/render_bvhs.sh /home/inseo/Github/Anytop/save/20260302_Retarget_dataset_truebones_bs_4_latentdim_128/visualizations/step000599999
-~/Github/BVHView/render_bvhs.sh ~/Github/Anytop/dataset/truebones/zoo/truebones_processed/bvhs/BrownBear
-~/Github/BVHView/render_bvhs.sh ~/Github/Anytop/save/20260218_Retarget_dataset_truebones_bs_4_latentdim_128/visualizations/step00029001
+    output: 
+        /home/inseo/Github/BVHView/render_bvhs.sh /home/inseo/Github/Anytop/save/20260312_Retarget_1_latentdim_128_src_BrownBear_selfRecon_crossRecon/visualizations/step000599999
+    source: 
+        /home/inseo/Github/BVHView/render_bvhs.sh /home/inseo/Github/Anytop/dataset/truebones/zoo/truebones_processed/bvhs/BrownBear
 """
 
 import sys
@@ -53,9 +66,17 @@ def main():
             # prefix = args.model_prefix
             prefix = "retarget_" + args.source_group
         model_name = f'{prefix}_{args.batch_size}_latentdim_{args.latent_dim}_src'
+        
         # source skel
-        for animal in args.source_skeleton:
+        if args.source_skeleton is not None:
+            source_group = [getattr(args, 'source_skeleton', None)]
+        elif args.source_group is not None:
+            source_group = [getattr(args, 'source_group', None)]
+        else: 
+            raise ValueError("Must specify either source_group or source_skeletons")
+        for animal in source_group:
             model_name += f'_{animal}'
+            
         # options
         if args.use_self_reconstruction:
             model_name += '_selfRecon'
