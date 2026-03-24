@@ -324,24 +324,19 @@ class RetargetTrainLoop:
             self.mp_trainer.backward(loss)
 
             # ── Cycle reconstruction loss (B' → A direction) ────────────────
-            # Approximation: use single-step x_0 prediction (pred_xstart) from
-            # the main pass as the "generated" B' without running full denoising.
-            # B' is detached so gradients flow only through the cycle forward pass.
-            # Separate backward avoids holding both computation graphs in VRAM.
+            # Approximation: use single-step x_0 prediction (pred_xstart) from the main pass as the "generated" B' without running full denoising.
+            # B' is detached so gradients flow only through the cycle forward pass. (Separate backward avoids holding both computation graphs in VRAM.)
             if self.use_cycle_loss and source_motion is not None and source_cond is not None:
-                # Skip cycle for fully self-reconstruction batches (no new signal)
-                all_self = is_self is not None and all(is_self)
-                if not all_self:
-                    pred_xstart_B = losses["pred_xstart"].detach()
-                    cycle_loss = self._compute_cycle_loss(
-                        pred_xstart_B=pred_xstart_B,
-                        source_motion=source_motion,
-                        source_cond=source_cond,
-                        cond=micro_cond,
-                        weights=weights,
-                    )
-                    log_loss_dict(self.diffusion, t, {"cycle_loss": cycle_loss.unsqueeze(0).expand(t.shape) * weights})
-                    self.mp_trainer.backward(self.lambda_cycle * cycle_loss)
+                pred_xstart_B = losses["pred_xstart"].detach()
+                cycle_loss = self._compute_cycle_loss(
+                    pred_xstart_B=pred_xstart_B,
+                    source_motion=source_motion,
+                    source_cond=source_cond,
+                    cond=micro_cond,
+                    weights=weights,
+                )
+                log_loss_dict(self.diffusion, t, {"cycle_loss": cycle_loss.unsqueeze(0).expand(t.shape) * weights})
+                self.mp_trainer.backward(self.lambda_cycle * cycle_loss)
             # ────────────────────────────────────────────────────────────────
 
     def _compute_cycle_loss(self, pred_xstart_B, source_motion, source_cond, cond, weights):

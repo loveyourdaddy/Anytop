@@ -1,38 +1,39 @@
 # This code is based on https://github.com/openai/guided-diffusion
 """
-use_self_reconstruction: source motion에 대해 reconstruction loss
-use_cross_reconstruction: source motion과 target motion의 이름이 동일할 때, target motion에 대해 reconstruction loss
-use_cycle_loss: source motion -> target motion -> source motion으로 cycle loss
-
-
 Usage:
-    python -m train.train_retarget \
-        --overwrite \
-        --source_group quadropeds \
-        --source_skeleton BrownBear \
-        --batch_size 1 \
-        --lambda_geo 1.0 \
-        --use_self_reconstruction\
-        --use_cycle_loss
-        
-        --use_cross_reconstruction\
+python -m train.train_retarget \
+    --overwrite \
+    --source_group quadropeds \
+    --source_skeleton BrownBear \
+    --batch_size 1 \
+    --lambda_geo 1.0 \
+    --use_self_reconstruction\
+    --use_cycle_loss
+    
+    --use_cross_reconstruction\
 
 모든 quadropeds을 source로:
-    python -m train.train_retarget \
-        --overwrite \
-        --source_group quadropeds \
-        --batch_size 1 \
-        --lambda_geo 1.0 \
-        --use_self_reconstruction\
-        --use_cycle_loss
-    
-        --use_cross_reconstruction\
-            
+python -m train.train_retarget \
+    --overwrite \
+    --source_group quadropeds \
+    --batch_size 1 \
+    --lambda_geo 1.0 \
+    --use_self_reconstruction\
+    --use_cycle_loss
+
+    --use_cross_reconstruction\
+
+--latent_dim 64
 --source_skeleton Horse
 --lambda_cycle 0.1
 --resume_checkpoint save/20260218_Retarget_dataset_truebones_bs_4_latentdim_128/model000290000.pt 
 --save_dir save/20260218_Retarget_dataset_truebones_bs_4_latentdim_128
-    
+
+Options    
+    use_self_reconstruction: source motion에 대해 reconstruction loss
+    use_cross_reconstruction: source motion과 target motion의 이름이 동일할 때, target motion에 대해 reconstruction loss
+    use_cycle_loss: source motion -> target motion -> source motion으로 cycle loss
+
 Visualization
     output: 
         /home/inseo/Github/BVHView/render_bvhs.sh /home/inseo/Github/Anytop/save/20260312_Retarget_1_latentdim_128_src_BrownBear_selfRecon_crossRecon/visualizations/step000599999
@@ -68,8 +69,8 @@ def main():
         model_name = f'{prefix}_{args.batch_size}_latentdim_{args.latent_dim}_src'
         
         # source skel
-        if args.source_skeleton is not None:
-            source_group = [getattr(args, 'source_skeleton', None)]
+        if args.source_skeleton is not None: # args.source_skeleton: list 
+            source_group = getattr(args, 'source_skeleton', None)
         elif args.source_group is not None:
             source_group = [getattr(args, 'source_group', None)]
         else: 
