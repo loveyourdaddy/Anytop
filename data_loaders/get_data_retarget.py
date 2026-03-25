@@ -99,6 +99,25 @@ def get_retarget_dataset_loader(
     # args.source_skeleton: 지정된 경우 해당 skeleton만 source로 사용, None이면 group 전체 사용
     selected_source_skeletons = getattr(args, 'source_skeleton', None)  # list or None
     data_dir = getattr(args, 'data_dir', './dataset/truebones/zoo/truebones_processed')
+
+    # Build shared T5 conditioner and joint-name embedding cache once for all datasets
+    from model.conditioners import T5Conditioner
+    from data_loaders.truebones.truebones_utils.get_opt import get_opt
+    import numpy as np
+    shared_t5 = T5Conditioner(name=t5_name, finetune=False, word_dropout=0.0, normalize_text=False, device='cpu')
+    _opt = get_opt('cuda')
+    _cond_dict_full = np.load(_opt.cond_file, allow_pickle=True).item() # all animals
+    shared_embs_cache = {}
+    _names_to_emb = {}
+    for _skel, _cond in _cond_dict_full.items():
+        print(f"_skel: {_skel}")
+        _joints_names_padded = _cond['joints_names'] + [None] * (_opt.max_joints - len(_cond['joints_names'])) # padded with None to max_joints
+        _key = tuple(_joints_names_padded)
+        if _key not in _names_to_emb:
+            _names_tokens = shared_t5.tokenize(_joints_names_padded)
+            _names_to_emb[_key] = shared_t5(_names_tokens).detach().cpu().numpy()
+        shared_embs_cache[_skel] = _names_to_emb[_key]
+
     datasets = []
     for source_skel in skeletons:
         # selected_source_skeletons: source skeleton이 옵션으로 지정된 것
@@ -124,7 +143,9 @@ def get_retarget_dataset_loader(
             target_skeletons=target_skels,
             use_augmentation=False,
             include_self_reconstruction=use_self_reconstruction,
-            include_cross_reconstruction=use_cross_reconstruction
+            include_cross_reconstruction=use_cross_reconstruction,
+            t5_conditioner=shared_t5,
+            joints_names_embs_cache=shared_embs_cache,
         )
         datasets.append(dataset)
 

@@ -31,7 +31,9 @@ class RetargetDataset(Dataset):
         target_skeletons=None,
         use_augmentation=False,
         include_self_reconstruction=True,
-        include_cross_reconstruction=True
+        include_cross_reconstruction=True,
+        t5_conditioner=None,
+        joints_names_embs_cache=None,
     ):
         """
         Args:
@@ -75,25 +77,41 @@ class RetargetDataset(Dataset):
             # Use all skeletons
             self.cond_dict = cond_dict_full
 
-        # Initialize T5 conditioner
-        self.t5_conditioner = T5Conditioner(
-            name=t5_name,
-            finetune=False,
-            word_dropout=0.0,
-            normalize_text=False,
-            device='cpu'  # CPU to avoid CUDA multiprocessing issues
-        )
+        # Initialize T5 conditioner (reuse shared instance if provided)
+        if t5_conditioner is not None:
+            self.t5_conditioner = t5_conditioner
+        else:
+            self.t5_conditioner = T5Conditioner(
+                name=t5_name,
+                finetune=False,
+                word_dropout=0.0,
+                normalize_text=False,
+                device='cpu'  # CPU to avoid CUDA multiprocessing issues
+            )
 
         # Build motion pairs
         self.motion_pairs = []
         self._build_motion_pairs()
 
         # joint name embeddings (cache)
-        self.joints_names_embs_cache = {}
-        for skeleton_type in self.cond_dict.keys():
-            joints_names = self.cond_dict[skeleton_type]['joints_names']
-            joints_names_padded = joints_names + [None] * (self.opt.max_joints - len(joints_names)) # padded to max_joints length(143) with None
-            self.joints_names_embs_cache[skeleton_type] = self._encode_joints_names(joints_names_padded)
+        if joints_names_embs_cache is not None:
+            # Use shared cache — filter to only the skeletons this dataset uses
+            self.joints_names_embs_cache = {
+                k: joints_names_embs_cache[k]
+                for k in self.cond_dict.keys()
+                if k in joints_names_embs_cache
+            }
+        else:
+            # Deduplicate: skeletons sharing the same joint names list reuse one T5 encoding
+            self.joints_names_embs_cache = {}
+            _names_to_emb = {}  # tuple(joints_names_padded) -> embedding
+            for skeleton_type in self.cond_dict.keys():
+                joints_names = self.cond_dict[skeleton_type]['joints_names']
+                joints_names_padded = joints_names + [None] * (self.opt.max_joints - len(joints_names)) # padded to max_joints length(143) with None
+                key = tuple(joints_names_padded)
+                if key not in _names_to_emb:
+                    _names_to_emb[key] = self._encode_joints_names(joints_names_padded)
+                self.joints_names_embs_cache[skeleton_type] = _names_to_emb[key]
 
     def _build_motion_pairs(self):
         """
