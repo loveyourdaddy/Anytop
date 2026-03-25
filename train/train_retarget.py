@@ -1,17 +1,16 @@
 # This code is based on https://github.com/openai/guided-diffusion
 """
 Usage:
+Single character
 python -m train.train_retarget \
     --overwrite \
-    --source_group quadropeds \
     --source_skeleton BrownBear \
+    --source_group quadropeds \
     --batch_size 1 \
     --lambda_geo 1.0 \
     --use_self_reconstruction\
     --use_cycle_loss
     
-    --use_cross_reconstruction\
-
 모든 quadropeds을 source로:
 python -m train.train_retarget \
     --overwrite \
@@ -21,18 +20,16 @@ python -m train.train_retarget \
     --use_self_reconstruction\
     --use_cycle_loss
 
-    --use_cross_reconstruction\
-
+Options
+    source_group: 리타게팅하려는 그룹. 무조건 명시되어야함
+    use_self_reconstruction: source motion에 대해 reconstruction loss
+    use_cross_reconstruction: source motion과 target motion의 이름이 동일할 때, target motion에 대해 reconstruction loss
+    use_cycle_loss: source motion -> target motion -> source motion으로 cycle loss
 --latent_dim 64
 --source_skeleton Horse
 --lambda_cycle 0.1
 --resume_checkpoint save/20260218_Retarget_dataset_truebones_bs_4_latentdim_128/model000290000.pt 
 --save_dir save/20260218_Retarget_dataset_truebones_bs_4_latentdim_128
-
-Options    
-    use_self_reconstruction: source motion에 대해 reconstruction loss
-    use_cross_reconstruction: source motion과 target motion의 이름이 동일할 때, target motion에 대해 reconstruction loss
-    use_cycle_loss: source motion -> target motion -> source motion으로 cycle loss
 
 Visualization
     output: 

@@ -92,15 +92,8 @@ class RetargetDataset(Dataset):
         self.joints_names_embs_cache = {}
         for skeleton_type in self.cond_dict.keys():
             joints_names = self.cond_dict[skeleton_type]['joints_names']
-            joints_names_padded = joints_names + [None] * (self.opt.max_joints - len(joints_names))
+            joints_names_padded = joints_names + [None] * (self.opt.max_joints - len(joints_names)) # padded to max_joints length(143) with None
             self.joints_names_embs_cache[skeleton_type] = self._encode_joints_names(joints_names_padded)
-
-        # TODO : 첫번째 페어만 사용 (일단 1개 모션만 학습)
-        # for motion in self.motion_pairs:
-        #     if motion['action_name'] == 'Dash':
-        #         self.motion_pairs = [motion]
-        #         break
-        # self.motion_pairs = self.motion_pairs[:1]
 
     def _build_motion_pairs(self):
         """
@@ -154,7 +147,7 @@ class RetargetDataset(Dataset):
         self_count = 0
         for action_name, skeleton_motions in motion_dict.items(): # 'action', [('source_skeleton', 'motion'), ...]
             for i, (source_type, source_path) in enumerate(skeleton_motions):
-                # motiont의 source type이 지정된 source skeleton이 아니라면 제외
+                # motion의 source type이 지정된 source skeleton이 아니라면 제외
                 if self.source_skeleton and source_type != self.source_skeleton:
                     continue
 
@@ -187,8 +180,7 @@ class RetargetDataset(Dataset):
                         })
                         cross_count += 1
 
-        print(f"    Built {len(self.motion_pairs)} motion pairs "
-              f"(cross: {cross_count}, self-reconstruction: {self_count})")
+        print(f"    Built {len(self.motion_pairs)} motion pairs (cross: {cross_count}, self-reconstruction: {self_count})")
 
     def _load_motion(self, motion_path, skeleton_type):
         """Load and preprocess motion data"""

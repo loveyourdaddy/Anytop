@@ -101,7 +101,8 @@ def get_retarget_dataset_loader(
     data_dir = getattr(args, 'data_dir', './dataset/truebones/zoo/truebones_processed')
     datasets = []
     for source_skel in skeletons:
-        # source skeleton이 지정된 경우, 해당 목록에 없으면 skip
+        # selected_source_skeletons: source skeleton이 옵션으로 지정된 것
+        # source skeleton이 옵션으로 지정되었을 경우, source_skel 해당 목록에 없으면 skip
         if selected_source_skeletons is not None and source_skel not in selected_source_skeletons:
             continue
 
@@ -125,7 +126,6 @@ def get_retarget_dataset_loader(
             include_self_reconstruction=use_self_reconstruction,
             include_cross_reconstruction=use_cross_reconstruction
         )
-
         datasets.append(dataset)
 
     # Concatenate all datasets
