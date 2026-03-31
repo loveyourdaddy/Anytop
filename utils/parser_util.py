@@ -93,6 +93,8 @@ def add_model_options(parser):
                             " For classifier-free guidance learning.")
     group.add_argument("--lambda_fs", default=0.0, type=float, help="Foot contact loss.")
     group.add_argument("--lambda_geo", default=1.0, type=float, help="Foot contact loss.")  # TODO: Tuning
+    group.add_argument("--lambda_root", default=1.0, type=float, help="Extra weight on root joint (index 0) MSE loss.")
+    group.add_argument("--lambda_self_recon", default=1.0, type=float, help="Extra weight for self-reconstruction pairs.")
     group.add_argument("--t5_name", default='t5-base', choices=["t5-small", "t5-base", "t5-large", "t5-3b", "t5-11b",
                                                                 "google/flan-t5-small", "google/flan-t5-base", "google/flan-t5-large",
                                                                 "google/flan-t5-xl", "google/flan-t5-xxl"], type=str,

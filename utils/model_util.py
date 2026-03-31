@@ -74,4 +74,6 @@ def create_gaussian_diffusion(args):
         rescale_timesteps=rescale_timesteps,
         lambda_fs=args.lambda_fs,
         lambda_geo=args.lambda_geo,
+        lambda_root=getattr(args, 'lambda_root', 1.0),
+        lambda_self_recon=getattr(args, 'lambda_self_recon', 1.0),
     )

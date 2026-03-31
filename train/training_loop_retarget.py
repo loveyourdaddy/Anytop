@@ -191,6 +191,7 @@ class RetargetTrainLoop:
                 cond['y']['source_joints_names_embs']= source_cond['y']['joints_names_embs'].to(self.device)
                 cond['y']['source_n_joints']         = source_cond['y']['n_joints'].to(self.device)
                 cond['y']['source_crop_start_ind']   = source_cond['y']['crop_start_ind'].to(self.device)
+                cond['y']['is_self']                 = metadata.get('is_self', None)
 
                 # Run training step
                 self.run_step(target_motion, cond,

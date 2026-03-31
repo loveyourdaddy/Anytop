@@ -125,7 +125,9 @@ class GaussianDiffusion:
         loss_type,
         rescale_timesteps=False,
         lambda_fs=0.,
-        lambda_geo=0.
+        lambda_geo=0.,
+        lambda_root=1.0,
+        lambda_self_recon=1.0,
     ):
         self.model_mean_type = model_mean_type
         self.model_var_type = model_var_type
@@ -133,6 +135,8 @@ class GaussianDiffusion:
         self.rescale_timesteps = rescale_timesteps
         self.lambda_fs = lambda_fs
         self.lambda_geo = lambda_geo
+        self.lambda_root = lambda_root
+        self.lambda_self_recon = lambda_self_recon
 
         # Use float64 for accuracy.
         betas = np.array(betas, dtype=np.float64)
@@ -1507,6 +1511,7 @@ class GaussianDiffusion:
         joints_mask = model_kwargs['y']['joints_mask'][:, :, :, 1, 1:]
         mean = model_kwargs['y']['mean'][..., None]
         std = model_kwargs['y']['std'][..., None]
+        is_self = model_kwargs['y'].get('is_self', None)  # list[bool] or None
         
         if model_kwargs is None:
             model_kwargs = {}
@@ -1561,11 +1566,28 @@ class GaussianDiffusion:
             }[self.model_mean_type]
             assert model_output.shape == target.shape == x_start.shape  # [bs, njoints, nfeats, nframes]
 
-            # 1. simple loss
-            # get ric positions befor denorm to care equally for all topologies
+            # 1. simple loss (normalized space, uniform over all joints)
             terms["l_simple"] = self.temporal_spatial_masked_l2(target, model_output, mask, joints_mask, lengths, actual_joints)
             terms["loss"] = torch.zeros_like(terms["l_simple"])
             terms["loss"] = terms["loss"] + terms["l_simple"]
+
+            # 2. Root joint loss — extra weight on joint 0 (pos[0:3] + rot[3:9] + vel[9:12])
+            if self.lambda_root > 0.:
+                # root spatial mask: all ones since root always exists
+                root_spat_mask = torch.ones(mask.shape[0], 1, 1, 1, device=mask.device)
+                terms["root_loss"] = self.temporal_spatial_masked_l2(target[:, 0:1], model_output[:, 0:1], mask, root_spat_mask, lengths, th.ones_like(actual_joints))
+                terms["loss"] = terms["loss"] + self.lambda_root * terms["root_loss"]
+
+            # 3. Self-reconstruction loss — extra MSE for self pairs (source == target)
+            if self.lambda_self_recon > 0. and is_self is not None:
+                self_mask = th.tensor(is_self, dtype=th.bool, device=model_output.device)
+                if self_mask.any():
+                    terms["self_recon_loss"] = self.temporal_spatial_masked_l2(
+                        target[self_mask], model_output[self_mask],
+                        mask[self_mask], joints_mask[self_mask],
+                        lengths[self_mask], actual_joints[self_mask]
+                    )
+                    terms["loss"] = terms["loss"] + self.lambda_self_recon * terms["self_recon_loss"]
 
             # expose normalized x_0 prediction for downstream use (e.g. cycle loss)
             terms["pred_xstart"] = model_output.detach().clone()
@@ -1573,9 +1595,8 @@ class GaussianDiffusion:
             # denormalize before applying loss terms
             target = (target * std) + mean
             model_output = (model_output * std) + mean
-            
-            # # calc all loss terms 
-            if self.lambda_geo > 0.:    
+
+            if self.lambda_geo > 0.:
                 terms["geodesic_loss"] = self.geodesic_loss(target, model_output, mask, joints_mask, lengths, actual_joints)
                 terms["loss"] = terms["loss"] + self.lambda_geo * terms["geodesic_loss"]
             if self.lambda_fs > 0.:

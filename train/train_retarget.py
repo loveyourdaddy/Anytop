@@ -16,7 +16,6 @@ python -m train.train_retarget \
     --overwrite \
     --source_group quadropeds \
     --batch_size 1 \
-    --lambda_geo 1.0 \
     --use_self_reconstruction\
     --use_cycle_loss
 
@@ -35,6 +34,9 @@ Options
     use_self_reconstruction: source motion에 대해 reconstruction loss
     use_cross_reconstruction: source motion과 target motion의 이름이 동일할 때, target motion에 대해 reconstruction loss
     use_cycle_loss: source motion -> target motion -> source motion으로 cycle loss
+    --lambda_root 2.0 \
+    --lambda_self_recon 2.0 \
+    --lambda_geo 1.0 \
 --latent_dim 64
 --source_skeleton Horse
 --lambda_cycle 0.1
