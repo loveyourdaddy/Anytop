@@ -784,14 +784,15 @@ def save_training_visualization(
     save_dir,
     step,
     device,
-    fps=30
+    fps=30,
+    args=None,
 ):
     """
     Generate and save motion visualization during training.
     모든 source motion × 모든 target animal 조합에 대해 생성 결과를 저장한다.
 
-    data_loader.dataset(ConcatDataset)의 motion_pairs 전체를 셔플 없이 순회하며,
-    파일이 이미 존재하면 skip한다.
+    args가 제공되면 group의 모든 skeleton을 target으로 포함하는 전용 DataLoader를 생성한다.
+    args가 없으면 data_loader.dataset을 그대로 사용한다.
 
     파일명: {source_type}_{action_name}_to_{target_type}.bvh
     저장 경로: {save_dir}/visualizations/step{step:09d}/
@@ -813,16 +814,32 @@ def save_training_visualization(
     cond_dict_full = np.load(opt.cond_file, allow_pickle=True).item()
 
     # ── 평가 전용 DataLoader ──────────────────────────────────────────────────
-    # 학습용 DataLoader와 동일한 dataset/collate_fn을 사용하되,
-    # shuffle=False, drop_last=False 로 모든 pair를 빠짐없이 순회한다.
-    eval_loader = TorchDataLoader(
-        data_loader.dataset,
-        batch_size=data_loader.batch_size,
-        shuffle=False,
-        drop_last=False,
-        collate_fn=data_loader.collate_fn,
-        num_workers=0,
-    )
+    # args가 있으면 group의 모든 skeleton을 source/target으로 포함하는 전용 DataLoader 생성
+    # (self + cross 모두 포함, training 설정과 무관하게 항상 전체 조합을 시각화)
+    if args is not None:
+        from data_loaders.get_data_retarget import get_retarget_dataset_loader
+        vis_args = type('VisArgs', (), vars(args))()  # shallow copy
+        vis_args.use_self_reconstruction = True
+        vis_args.use_cross_reconstruction = True
+        eval_loader = get_retarget_dataset_loader(
+            vis_args,
+            batch_size=data_loader.batch_size,
+            num_frames=args.num_frames,
+            temporal_window=args.temporal_window,
+            t5_name=args.t5_name,
+            source_group=getattr(args, 'source_group', None),
+            source_skeletons=getattr(args, 'source_skeleton', None),
+        )
+    else:
+        # fallback: 학습용 DataLoader와 동일한 dataset/collate_fn 사용
+        eval_loader = TorchDataLoader(
+            data_loader.dataset,
+            batch_size=data_loader.batch_size,
+            shuffle=False,
+            drop_last=False,
+            collate_fn=data_loader.collate_fn,
+            num_workers=0,
+        )
 
     total_pairs = len(data_loader.dataset)
     print(f"Dataset pairs: {total_pairs}  |  Batches: {len(eval_loader)}")

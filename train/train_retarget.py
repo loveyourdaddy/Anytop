@@ -10,7 +10,7 @@ python -m train.train_retarget \
     --lambda_geo 1.0 \
     --use_self_reconstruction\
     --use_cycle_loss
-    
+
 모든 quadropeds을 source로:
 python -m train.train_retarget \
     --overwrite \
@@ -20,6 +20,16 @@ python -m train.train_retarget \
     --use_self_reconstruction\
     --use_cycle_loss
 
+Resume
+python -m train.train_retarget \
+    --source_group quadropeds \
+    --batch_size 1 \
+    --resume_checkpoint save/20260325_Retarget_1_latentdim_128_src_BrownBear_selfRecon_cycle/model000500000.pt \
+    --save_dir save/20260325_Retarget_1_latentdim_128_src_BrownBear_selfRecon_cycle \
+    --overwrite \
+    --use_self_reconstruction \
+    --use_cycle_loss
+    
 Options
     source_group: 리타게팅하려는 그룹. 무조건 명시되어야함
     use_self_reconstruction: source motion에 대해 reconstruction loss
@@ -33,7 +43,8 @@ Options
 
 Visualization
     output: 
-        /home/inseo/Github/BVHView/render_bvhs.sh /home/inseo/Github/Anytop/save/20260312_Retarget_1_latentdim_128_src_BrownBear_selfRecon_crossRecon/visualizations/step000599999
+        /home/inseo/Github/BVHView/render_bvhs.sh /home/inseo/Github/Anytop/save/20260325_Retarget_1_latentdim_128_src_quadropeds_selfRecon_cycle/visualization/step000400000
+        /home/inseo/Github/Anytop/save/20260325_Retarget_1_latentdim_128_src_BrownBear_selfRecon_cycle/visualization/step000500000
     source: 
         /home/inseo/Github/BVHView/render_bvhs.sh /home/inseo/Github/Anytop/dataset/truebones/zoo/truebones_processed/bvhs/BrownBear
 """
