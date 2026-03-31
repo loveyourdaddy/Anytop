@@ -20,12 +20,12 @@ python -m train.train_retarget \
     --use_self_reconstruction\
     --use_cycle_loss
 
-Resume
+Resume (resume_chekcpoint, save_dir must be specified):
 python -m train.train_retarget \
     --source_group quadropeds \
     --batch_size 1 \
-    --resume_checkpoint save/20260325_Retarget_1_latentdim_128_src_BrownBear_selfRecon_cycle/model000500000.pt \
-    --save_dir save/20260325_Retarget_1_latentdim_128_src_BrownBear_selfRecon_cycle \
+    --resume_checkpoint save/20260325_Retarget_1_latentdim_128_src_quadropeds_selfRecon_cycle/visualization/step000400000.pt \
+    --save_dir save/20260325_Retarget_1_latentdim_128_src_quadropeds_selfRecon_cycle \
     --overwrite \
     --use_self_reconstruction \
     --use_cycle_loss
@@ -43,8 +43,8 @@ Options
 
 Visualization
     output: 
-        /home/inseo/Github/BVHView/render_bvhs.sh /home/inseo/Github/Anytop/save/20260325_Retarget_1_latentdim_128_src_quadropeds_selfRecon_cycle/visualization/step000400000
-        /home/inseo/Github/Anytop/save/20260325_Retarget_1_latentdim_128_src_BrownBear_selfRecon_cycle/visualization/step000500000
+        /home/inseo/Github/BVHView/render_bvhs.sh /home/inseo/Github/Anytop/save/20260325_Retarget_1_latentdim_128_src_quadropeds_selfRecon_cycle/visualizations/step000400001
+        /home/inseo/Github/Anytop/save/20260325_Retarget_1_latentdim_128_src_BrownBear_selfRecon_cycle/visualizations/step000500001
     source: 
         /home/inseo/Github/BVHView/render_bvhs.sh /home/inseo/Github/Anytop/dataset/truebones/zoo/truebones_processed/bvhs/BrownBear
 """

@@ -233,7 +233,8 @@ class RetargetTrainLoop:
                         save_dir=self.save_dir,
                         step=self.total_step(),
                         device=self.device,
-                        fps=30
+                        fps=30,
+                        args=self.args,
                     )
 
                 # Integration test

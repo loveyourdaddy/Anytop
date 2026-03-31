@@ -173,7 +173,7 @@ class RetargetDataset(Dataset):
                 if self.include_self_reconstruction:
                     self.motion_pairs.append({
                         'source_path': source_path,
-                        'source_type': source_type,
+                        'source_type': source_type, # type: skel 이름
                         'target_path': source_path,
                         'target_type': source_type,
                         'action_name': action_name,

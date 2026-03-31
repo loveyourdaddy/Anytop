@@ -5,6 +5,14 @@
 python -m sample.retarget --model_path save/quadropeds_model_dataset_truebones_bs_16_latentdim_128/model000189999.pt\
     --source_motion dataset/truebones/zoo/truebones_processed/motions/Alligator_Alligator_BigMouth_11.npy\
     --source_type Alligator --num_repetitions 3
+
+python -m sample.retarget --model_path save/quadropeds_model_dataset_truebones_bs_16_latentdim_128/model000189999.pt\
+    --source_motion dataset/truebones/zoo/truebones_processed/motions/Alligator_Alligator_BigMouth_11.npy\
+    --source_type Alligator --num_repetitions 3
+
+python -m sample.retarget --model_path save/quadropeds_model_dataset_truebones_bs_16_latentdim_128/model000189999.pt\
+    --source_motion dataset/truebones/zoo/truebones_processed/motions/Alligator_Alligator_BigMouth_11.npy\
+    --source_type Alligator --num_repetitions 3
 '''
 
 # This code is based on https://github.com/openai/guided-diffusion
@@ -163,13 +171,13 @@ def save_retargeted_motions(sample, model_kwargs, cond_dict, out_path,
         comparison_name = f'{name_pref}_comparison_#{len(existing_files)}.mp4'
 
         # Save motion
-        np.save(pjoin(out_path, npy_name), motion)
+        # np.save(pjoin(out_path, npy_name), motion)
 
         # Save visualization
-        plot_general_skeleton_3d_motion(
-            pjoin(out_path, mp4_name), parents, global_positions,
-            title=f'{source_type} → {target_type}', fps=fps
-        )
+        # plot_general_skeleton_3d_motion(
+        #     pjoin(out_path, mp4_name), parents, global_positions,
+        #     title=f'{source_type} → {target_type}', fps=fps
+        # )
 
         # Save BVH
         if out_anim is not None:
