@@ -2,11 +2,44 @@
 Data loader for retargeting training
 Following the AnyTop get_data.py pattern
 """
+import os
 from data_loaders.truebones.truebones_utils.param_utils import OBJECT_SUBSETS_DICT
 from torch.utils.data import DataLoader
 from data_loaders.truebones.data.dataset_retarget import RetargetDataset, collate_retarget_batch
 
 from torch.utils.data import ConcatDataset
+
+
+def _parse_paired_data_file(filepath):
+    """Parse tab-separated paired data file.
+
+    Format per line: SkelA/SkelA_Action.npz<TAB>SkelB/SkelB_Action.npz
+
+    Returns:
+        set of (src_skel, src_action, tgt_skel, tgt_action)
+    """
+    pairs = set()
+    with open(filepath) as f:
+        for line in f:
+            line = line.strip()
+            if not line:
+                continue
+            parts = line.split('\t')
+            if len(parts) < 2:
+                continue
+            src_path = parts[0]  # e.g. "BrownBear/BrownBear_Attack2.npz"
+            tgt_path = parts[1]  # e.g. "Buffalo/Buffalo_Attack.npz"
+
+            src_skel = src_path.split('/')[0]
+            src_stem = os.path.splitext(src_path.split('/')[-1])[0]  # "BrownBear_Attack2"
+            src_action = src_stem[len(src_skel) + 1:]               # "Attack2"
+
+            tgt_skel = tgt_path.split('/')[0]
+            tgt_stem = os.path.splitext(tgt_path.split('/')[-1])[0]
+            tgt_action = tgt_stem[len(tgt_skel) + 1:]
+
+            pairs.add((src_skel, src_action, tgt_skel, tgt_action))
+    return pairs
 
 
 def get_dataset_class(name):
@@ -95,10 +128,16 @@ def get_retarget_dataset_loader(
     print(f"🎬 Num frames: {num_frames}")
     print(f"{'='*80}\n")
 
-    # Use existing RetargetDataset!
     # args.source_skeleton: 지정된 경우 해당 skeleton만 source로 사용, None이면 group 전체 사용
     selected_source_skeletons = getattr(args, 'source_skeleton', None)  # list or None
     data_dir = getattr(args, 'data_dir', './dataset/truebones/zoo/truebones_processed')
+
+    # Parse paired data file if specified
+    paired_data_file = getattr(args, 'paired_data_file', None)
+    paired_pairs = None
+    if paired_data_file is not None:
+        paired_pairs = _parse_paired_data_file(paired_data_file)
+        print(f"Paired mode: loaded {len(paired_pairs)} pairs from {paired_data_file}")
 
     # Build shared T5 conditioner and joint-name embedding cache once for all datasets
     from model.conditioners import T5Conditioner
@@ -109,8 +148,9 @@ def get_retarget_dataset_loader(
     _cond_dict_full = np.load(_opt.cond_file, allow_pickle=True).item() # all animals
     shared_embs_cache = {}
     _names_to_emb = {}
+    print("Building shared T5 conditioner and joint-name embedding cache...")
     for _skel, _cond in _cond_dict_full.items():
-        print(f"_skel: {_skel}")
+        # print(f"_skel: {_skel}")
         _joints_names_padded = _cond['joints_names'] + [None] * (_opt.max_joints - len(_cond['joints_names'])) # padded with None to max_joints
         _key = tuple(_joints_names_padded)
         if _key not in _names_to_emb:
@@ -125,10 +165,16 @@ def get_retarget_dataset_loader(
         if selected_source_skeletons is not None and source_skel not in selected_source_skeletons:
             continue
 
-        # 지정된 group안에 있는 skeleton만 선택
-        target_skels = [s for s in skeletons if s != source_skel]
-        if not target_skels:
-            continue
+        # Paired mode: derive target skeletons from the txt file for this source.
+        # Default mode: all other skeletons in the group.
+        if paired_pairs is not None:
+            target_skels = sorted({tgt for (src, _, tgt, _) in paired_pairs if src == source_skel})
+            if not target_skels:
+                continue  # this source has no entries in the paired file
+        else:
+            target_skels = [s for s in skeletons if s != source_skel]
+            if not target_skels:
+                continue
 
         print(f"RetargetDataset of {source_skel} -> {target_skels}:")
         use_self_reconstruction = getattr(args, 'use_self_reconstruction', True)
@@ -146,7 +192,10 @@ def get_retarget_dataset_loader(
             include_cross_reconstruction=use_cross_reconstruction,
             t5_conditioner=shared_t5,
             joints_names_embs_cache=shared_embs_cache,
+            paired_pairs=paired_pairs,
         )
+        if len(dataset) == 0:
+            continue
         datasets.append(dataset)
 
     # Concatenate all datasets

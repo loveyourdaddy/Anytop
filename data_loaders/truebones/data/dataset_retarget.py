@@ -34,6 +34,7 @@ class RetargetDataset(Dataset):
         include_cross_reconstruction=True,
         t5_conditioner=None,
         joints_names_embs_cache=None,
+        paired_pairs=None,
     ):
         """
         Args:
@@ -55,6 +56,7 @@ class RetargetDataset(Dataset):
         self.use_augmentation = use_augmentation
         self.include_self_reconstruction = include_self_reconstruction
         self.include_cross_reconstruction = include_cross_reconstruction
+        self.paired_pairs = paired_pairs  # set of (src_skel, src_action, tgt_skel, tgt_action) or None
 
         # Load condition dictionary
         from data_loaders.truebones.truebones_utils.get_opt import get_opt
@@ -115,28 +117,28 @@ class RetargetDataset(Dataset):
 
     def _build_motion_pairs(self):
         """
-        Build pairs of motions from different skeletons
-        Groups motions by action name and creates cross-skeleton pairs
+        Build pairs of motions from different skeletons.
+        When self.paired_pairs is set, only create pairs defined in that set.
+        Otherwise, groups motions by action name and creates cross-skeleton pairs.
         """
+        motions_dir = self.opt.motion_dir
+        if not os.path.exists(motions_dir):
+            raise FileNotFoundError(f"Motion directory not found: {motions_dir}")
+
+        all_files = [f for f in os.listdir(motions_dir) if f.endswith('.npy')]
+        print(f"    Found {len(all_files)} motion files in {motions_dir}")
+
+        if self.paired_pairs is not None:
+            self._build_from_paired_pairs(all_files, motions_dir)
+            return
+
         motion_dict = {}  # action_name -> [(skeleton_type, motion_path)]
 
         # Determine which skeletons to use
         if self.source_skeleton and self.target_skeletons:
-            skeleton_types = [self.source_skeleton] + self.target_skeletons  # source + targets
+            skeleton_types = [self.source_skeleton] + self.target_skeletons
         else:
-            # Use all available skeletons
             skeleton_types = list(self.cond_dict.keys())
-
-        # Load motion directory path from opt
-        from data_loaders.truebones.truebones_utils.get_opt import get_opt
-        opt = get_opt('cuda')
-        motions_dir = opt.motion_dir
-        if not os.path.exists(motions_dir):
-            raise FileNotFoundError(f"Motion directory not found: {motions_dir}")
-
-        # Scan all motion files
-        all_files = [f for f in os.listdir(motions_dir) if f.endswith('.npy')]
-        print(f"    Found {len(all_files)} motion files in {motions_dir}")
 
         # 모든 모션파일에서 source_type이 있는것을 찾기
         for motion_file in all_files:
@@ -163,17 +165,15 @@ class RetargetDataset(Dataset):
         # Create pairs from same actions across different skeletons
         cross_count = 0
         self_count = 0
-        for action_name, skeleton_motions in motion_dict.items(): # 'action', [('source_skeleton', 'motion'), ...]
+        for action_name, skeleton_motions in motion_dict.items():
             for i, (source_type, source_path) in enumerate(skeleton_motions):
-                # motion의 source type이 지정된 source skeleton이 아니라면 제외
                 if self.source_skeleton and source_type != self.source_skeleton:
                     continue
 
-                # Self-reconstruction pair: source == target (same file, same skeleton)
                 if self.include_self_reconstruction:
                     self.motion_pairs.append({
                         'source_path': source_path,
-                        'source_type': source_type, # type: skel 이름
+                        'source_type': source_type,
                         'target_path': source_path,
                         'target_type': source_type,
                         'action_name': action_name,
@@ -183,11 +183,9 @@ class RetargetDataset(Dataset):
 
                 if self.include_cross_reconstruction:
                     for target_type, target_path in skeleton_motions:
-                        # target skeleton에 없다면 제외, source_type==target_type일 수 있음
                         if self.target_skeletons and target_type not in self.target_skeletons:
                             continue
 
-                        # motion_pairs 등록
                         self.motion_pairs.append({
                             'source_path': source_path,
                             'source_type': source_type,
@@ -199,6 +197,64 @@ class RetargetDataset(Dataset):
                         cross_count += 1
 
         print(f"    Built {len(self.motion_pairs)} motion pairs (cross: {cross_count}, self-reconstruction: {self_count})")
+
+    def _build_from_paired_pairs(self, all_files, motions_dir):
+        """Build motion pairs using only entries from paired_pairs (the txt file)."""
+        # Collect all paths for each (skeleton, action) combination
+        # Build (skeleton, action) -> [path] index from npy files
+        skel_action_paths = {}
+        for fname in all_files:
+            parts = fname.replace('.npy', '').split('_')
+            if len(parts) < 3:
+                continue
+            skel = parts[0]
+            action = parts[2]
+            skel_action_paths.setdefault((skel, action), []).append(
+                os.path.join(motions_dir, fname)
+            )
+
+        cross_count = 0
+        self_count = 0
+        seen_self_paths = set()
+
+        for (src_skel, src_action, tgt_skel, tgt_action) in self.paired_pairs:
+            if src_skel != self.source_skeleton:
+                continue
+
+            # skel, action in skel_action_paths에 있다면 추가, 없다면 []
+            src_paths = skel_action_paths.get((src_skel, src_action), [])
+            tgt_paths = skel_action_paths.get((tgt_skel, tgt_action), [])
+
+            if not src_paths:
+                continue
+
+            for src_path in src_paths:
+                if self.include_self_reconstruction and src_path not in seen_self_paths:
+                    self.motion_pairs.append({
+                        'source_path': src_path,
+                        'source_type': src_skel,
+                        'target_path': src_path,
+                        'target_type': src_skel,
+                        'action_name': src_action,
+                        'is_self': True
+                    })
+                    seen_self_paths.add(src_path)
+                    self_count += 1
+
+                if self.include_cross_reconstruction:
+                    for tgt_path in tgt_paths:
+                        self.motion_pairs.append({
+                            'source_path': src_path,
+                            'source_type': src_skel,
+                            'target_path': tgt_path,
+                            'target_type': tgt_skel,
+                            'action_name': src_action,
+                            'is_self': False
+                        })
+                        cross_count += 1
+
+        print(f"    Built {len(self.motion_pairs)} paired motion pairs "
+              f"(cross: {cross_count}, self-reconstruction: {self_count})")
 
     def _load_motion(self, motion_path, skeleton_type):
         """Load and preprocess motion data"""

@@ -177,6 +177,10 @@ def add_training_options(parser):
                        help="Enable self-reconstruction pairs (source==target). Default: True.")
     group.add_argument("--use_cross_reconstruction", dest='use_cross_reconstruction', default=False, action='store_true',
                        help="Enable cross-skeleton name-matched pairs (A→B by action name). Default: True.")
+    group.add_argument("--paired_data_file", type=str, default=None,
+                       help="Path to a tab-separated file defining allowed (source, target) motion pairs. "
+                            "Each line: index<TAB>SkelA/SkelA_Action.npz<TAB>SkelB/SkelB_Action.npz. "
+                            "When set, only these explicit pairs are used for training.")
 
 
 def add_sampling_options(parser):
