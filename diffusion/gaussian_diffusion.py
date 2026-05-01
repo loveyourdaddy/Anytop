@@ -1582,11 +1582,15 @@ class GaussianDiffusion:
             if self.lambda_self_recon > 0. and is_self is not None:
                 self_mask = th.tensor(is_self, dtype=th.bool, device=model_output.device)
                 if self_mask.any():
-                    terms["self_recon_loss"] = self.temporal_spatial_masked_l2(
+                    self_recon_loss_vals = self.temporal_spatial_masked_l2(
                         target[self_mask], model_output[self_mask],
                         mask[self_mask], joints_mask[self_mask],
                         lengths[self_mask], actual_joints[self_mask]
                     )
+                    # Scatter sub-batch result back to full batch size (zeros for non-self pairs)
+                    full_self_recon = th.zeros_like(terms["loss"])
+                    full_self_recon[self_mask] = self_recon_loss_vals
+                    terms["self_recon_loss"] = full_self_recon
                     terms["loss"] = terms["loss"] + self.lambda_self_recon * terms["self_recon_loss"]
 
             # expose normalized x_0 prediction for downstream use (e.g. cycle loss)

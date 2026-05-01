@@ -1,0 +1,2 @@
+/home/inseo/Github/BVHView/render_bvhs.sh /home/inseo/Github/Anytop/save/20260401_Retarget_4_latentdim_128_src_BrownBear_selfRecon_cycle/visualizations/step000400000
+/home/inseo/Github/BVHView/render_bvhs.sh /home/inseo/Github/Anytop/save/20260401_Retarget_4_latentdim_128_src_quadropeds_selfRecon_cycle/visualizations/step000400000
